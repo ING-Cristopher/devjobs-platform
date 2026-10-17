@@ -16,7 +16,6 @@ export async function createJob(jobData) {
   return response.json();
 }
 
-// Nueva función de postulación
 export async function applyToJob(jobId, candidateData) {
   const response = await fetch(`${API_URL}/jobs/${jobId}/apply`, {
     method: "POST",
@@ -25,4 +24,13 @@ export async function applyToJob(jobId, candidateData) {
   });
   if (!response.ok) throw new Error("Error al enviar la postulación");
   return response.json();
+}
+
+// Nueva función: eliminar oferta laboral
+export async function deleteJob(jobId) {
+  const response = await fetch(`${API_URL}/jobs/${jobId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Error al eliminar la oferta laboral");
+  return true;
 }

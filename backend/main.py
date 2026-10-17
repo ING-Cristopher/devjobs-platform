@@ -56,3 +56,14 @@ def apply_to_job(job_id: int, application: schemas.ApplicationCreate, db: Sessio
     db.commit()
     db.refresh(new_app)
     return new_app
+
+# 4. Eliminar una oferta laboral y sus postulaciones asociadas
+@app.delete("/jobs/{job_id}", status_code=204)
+def delete_job(job_id: int, db: Session = Depends(get_db)):
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Oferta laboral no encontrada")
+    
+    db.delete(job)
+    db.commit()
+    return None

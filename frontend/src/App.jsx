@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getJobs, createJob } from "./services/api";
+import { getJobs, createJob, deleteJob } from "./services/api";
 import JobCard from "./components/JobCard";
 import JobFormModal from "./components/JobFormModal";
 import SearchBar from "./components/SearchBar";
@@ -12,7 +12,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Estados para los modales
   const [selectedJobToApply, setSelectedJobToApply] = useState(null);
   const [selectedJobToViewApps, setSelectedJobToViewApps] = useState(null);
 
@@ -40,7 +39,17 @@ export default function App() {
     setJobs([created, ...jobs]);
   };
 
-  // Recarga los datos tras postularse para actualizar el contador
+  // Manejo de eliminación en cliente
+  const handleDeleteJob = async (jobId) => {
+    try {
+      await deleteJob(jobId);
+      // Filtramos el empleo eliminado para removerlo del estado inmediatamente
+      setJobs(jobs.filter((j) => j.id !== jobId));
+    } catch (error) {
+      alert("Hubo un error al eliminar la oferta.");
+    }
+  };
+
   const handleApplicationSuccess = () => {
     fetchJobs();
   };
@@ -70,7 +79,7 @@ export default function App() {
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors shadow-sm"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             Publicar Empleo
@@ -103,7 +112,7 @@ export default function App() {
         ) : filteredJobs.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center max-w-md mx-auto">
             <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-700">No se encontraron empleos</h3>
+            <h3 className="text-lg font-bold text-slate-700">No se encontraron ofertas</h3>
             <p className="text-slate-500 text-sm mt-1">
               Prueba cambiando los términos de búsqueda o ubicación.
             </p>
@@ -116,20 +125,19 @@ export default function App() {
                 job={job}
                 onApply={(targetJob) => setSelectedJobToApply(targetJob)}
                 onViewApplications={(targetJob) => setSelectedJobToViewApps(targetJob)}
+                onDelete={handleDeleteJob}
               />
             ))}
           </div>
         )}
       </main>
 
-      {/* Modal para crear empleo */}
       <JobFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onJobCreated={handleCreateJob}
       />
 
-      {/* Modal para postularse */}
       <ApplyModal
         job={selectedJobToApply}
         isOpen={!!selectedJobToApply}
@@ -139,7 +147,6 @@ export default function App() {
         }}
       />
 
-      {/* Modal para ver lista de postulantes */}
       <ApplicationsModal
         job={selectedJobToViewApps}
         isOpen={!!selectedJobToViewApps}
