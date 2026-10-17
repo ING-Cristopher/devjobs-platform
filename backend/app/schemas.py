@@ -1,8 +1,26 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
-# Propiedades comunes que comparte un empleo
+# Esquemas de Postulación
+class ApplicationBase(BaseModel):
+    candidate_name: str
+    candidate_email: str
+    message: Optional[str] = None
+
+class ApplicationCreate(ApplicationBase):
+    pass
+
+class ApplicationResponse(ApplicationBase):
+    id: int
+    job_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Esquemas de Empleo
 class JobBase(BaseModel):
     title: str
     company: str
@@ -10,14 +28,13 @@ class JobBase(BaseModel):
     description: str
     salary: Optional[str] = None
 
-# Datos requeridos para crear un empleo (vienen del frontend)
 class JobCreate(JobBase):
     pass
 
-# Datos que la API devuelve al cliente (incluye ID y fecha generada)
 class JobResponse(JobBase):
     id: int
     created_at: datetime
+    applications: List[ApplicationResponse] = []
 
     class Config:
         from_attributes = True

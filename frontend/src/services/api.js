@@ -1,26 +1,28 @@
 const API_URL = "http://127.0.0.1:8000";
 
-// Obtener todas las ofertas laborales
 export async function getJobs() {
   const response = await fetch(`${API_URL}/jobs`);
-  if (!response.ok) {
-    throw new Error("Error al obtener los empleos");
-  }
+  if (!response.ok) throw new Error("Error al obtener empleos");
   return response.json();
 }
 
-// Crear una nueva oferta laboral
 export async function createJob(jobData) {
   const response = await fetch(`${API_URL}/jobs`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(jobData),
   });
+  if (!response.ok) throw new Error("Error al publicar el empleo");
+  return response.json();
+}
 
-  if (!response.ok) {
-    throw new Error("Error al publicar el empleo");
-  }
+// Nueva función de postulación
+export async function applyToJob(jobId, candidateData) {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(candidateData),
+  });
+  if (!response.ok) throw new Error("Error al enviar la postulación");
   return response.json();
 }

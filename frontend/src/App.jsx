@@ -3,6 +3,8 @@ import { getJobs, createJob } from "./services/api";
 import JobCard from "./components/JobCard";
 import JobFormModal from "./components/JobFormModal";
 import SearchBar from "./components/SearchBar";
+import ApplyModal from "./components/ApplyModal";
+import ApplicationsModal from "./components/ApplicationsModal";
 import { Briefcase, Plus, Loader2 } from "lucide-react";
 
 export default function App() {
@@ -10,7 +12,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Estados para capturar el texto que el usuario escribe en la búsqueda
+  // Estados para los modales
+  const [selectedJobToApply, setSelectedJobToApply] = useState(null);
+  const [selectedJobToViewApps, setSelectedJobToViewApps] = useState(null);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
 
@@ -35,7 +40,11 @@ export default function App() {
     setJobs([created, ...jobs]);
   };
 
-  // Lógica de filtrado en tiempo real con JavaScript
+  // Recarga los datos tras postularse para actualizar el contador
+  const handleApplicationSuccess = () => {
+    fetchJobs();
+  };
+
   const filteredJobs = jobs.filter((job) => {
     const matchesTitleOrCompany =
       job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -50,7 +59,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {/* Barra de navegación superior */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -70,7 +78,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Contenido principal */}
       <main className="max-w-6xl mx-auto px-4 py-10">
         <div className="mb-6">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
@@ -81,7 +88,6 @@ export default function App() {
           </p>
         </div>
 
-        {/* Componente de Búsqueda */}
         <SearchBar
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
@@ -89,14 +95,12 @@ export default function App() {
           setLocationFilter={setLocationFilter}
         />
 
-        {/* Indicador de carga */}
         {loading ? (
           <div className="flex justify-center items-center py-20 text-slate-400">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mr-2" />
             <span>Cargando ofertas...</span>
           </div>
         ) : filteredJobs.length === 0 ? (
-          /* Estado vacío si no hay coincidencias con la búsqueda */
           <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center max-w-md mx-auto">
             <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
             <h3 className="text-lg font-bold text-slate-700">No se encontraron empleos</h3>
@@ -105,20 +109,41 @@ export default function App() {
             </p>
           </div>
         ) : (
-          /* Cuadrícula de empleos filtrados */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredJobs.map((job) => (
-              <JobCard key={job.id} job={job} />
+              <JobCard
+                key={job.id}
+                job={job}
+                onApply={(targetJob) => setSelectedJobToApply(targetJob)}
+                onViewApplications={(targetJob) => setSelectedJobToViewApps(targetJob)}
+              />
             ))}
           </div>
         )}
       </main>
 
-      {/* Modal para publicar empleo */}
+      {/* Modal para crear empleo */}
       <JobFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onJobCreated={handleCreateJob}
+      />
+
+      {/* Modal para postularse */}
+      <ApplyModal
+        job={selectedJobToApply}
+        isOpen={!!selectedJobToApply}
+        onClose={() => {
+          setSelectedJobToApply(null);
+          handleApplicationSuccess();
+        }}
+      />
+
+      {/* Modal para ver lista de postulantes */}
+      <ApplicationsModal
+        job={selectedJobToViewApps}
+        isOpen={!!selectedJobToViewApps}
+        onClose={() => setSelectedJobToViewApps(null)}
       />
     </div>
   );

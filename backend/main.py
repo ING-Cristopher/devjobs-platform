@@ -6,27 +6,15 @@ from typing import List
 from app.database import engine, Base, get_db
 from app import models, schemas
 
-# Crea las tablas en jobs.db automáticamente si no existen
+# Crea las tablas si no existen en la base de datos
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(
-    title="Portal de Empleos API",
-    description="API para gestionar ofertas laborales y postulaciones",
-    version="1.0.0"
-)
+app = FastAPI(title="DevJobs API", version="1.0.0")
 
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "http://localhost:5175",
-    "http://127.0.0.1:5175",
-]
-# Permitimos que la futura app de React haga peticiones
+# Permitir orígenes cruzados en local
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,14 +22,14 @@ app.add_middleware(
 
 @app.get("/")
 def home():
-    return {"message": "API de Empleos activa y funcionando"}
+    return {"message": "API activa"}
 
-# 1. Obtener lista de todos los empleos
+# 1. Obtener lista de todos los empleos (los más recientes primero)
 @app.get("/jobs", response_model=List[schemas.JobResponse])
 def get_jobs(db: Session = Depends(get_db)):
-    return db.query(models.Job).all()
+    return db.query(models.Job).order_by(models.Job.id.desc()).all()
 
-# 2. Crear una nueva oferta de empleo
+# 2. Crear una oferta laboral
 @app.post("/jobs", response_model=schemas.JobResponse)
 def create_job(job: schemas.JobCreate, db: Session = Depends(get_db)):
     new_job = models.Job(**job.model_dump())
@@ -50,10 +38,21 @@ def create_job(job: schemas.JobCreate, db: Session = Depends(get_db)):
     db.refresh(new_job)
     return new_job
 
-# 3. Obtener un empleo específico por ID
-@app.get("/jobs/{job_id}", response_model=schemas.JobResponse)
-def get_job_by_id(job_id: int, db: Session = Depends(get_db)):
+# 3. Postularse a un empleo específico
+@app.post("/jobs/{job_id}/apply", response_model=schemas.ApplicationResponse)
+def apply_to_job(job_id: int, application: schemas.ApplicationCreate, db: Session = Depends(get_db)):
+    # Validamos que el empleo exista
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
-        raise HTTPException(status_code=404, detail="Oferta de empleo no encontrada")
-    return job
+        raise HTTPException(status_code=404, detail="Oferta laboral no encontrada")
+
+    new_app = models.Application(
+        job_id=job_id,
+        candidate_name=application.candidate_name,
+        candidate_email=application.candidate_email,
+        message=application.message,
+    )
+    db.add(new_app)
+    db.commit()
+    db.refresh(new_app)
+    return new_app
