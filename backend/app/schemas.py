@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional, List
 
-# Esquemas de Postulación
 class ApplicationBase(BaseModel):
     candidate_name: str
     candidate_email: str
@@ -20,11 +19,11 @@ class ApplicationResponse(ApplicationBase):
         from_attributes = True
 
 
-# Esquemas de Empleo
 class JobBase(BaseModel):
     title: str
     company: str
     location: str
+    job_type: Optional[str] = "Remoto" # Remoto, Presencial o Híbrido
     description: str
     salary: Optional[str] = None
 

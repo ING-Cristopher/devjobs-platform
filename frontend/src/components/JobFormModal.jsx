@@ -6,6 +6,7 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
     title: "",
     company: "",
     location: "",
+    job_type: "Remoto",
     salary: "",
     description: "",
   });
@@ -23,7 +24,14 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
     try {
       await onJobCreated(formData);
       onClose();
-      setFormData({ title: "", company: "", location: "", salary: "", description: "" });
+      setFormData({
+        title: "",
+        company: "",
+        location: "",
+        job_type: "Remoto",
+        salary: "",
+        description: "",
+      });
     } catch (error) {
       alert("Hubo un error al guardar el empleo");
     } finally {
@@ -51,7 +59,7 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
               name="title"
               value={formData.title}
               onChange={handleChange}
-              placeholder="Ej: Desarrollador Frontend React"
+              placeholder="Ej: Desarrollador Backend Python"
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -64,7 +72,7 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
                 name="company"
                 value={formData.company}
                 onChange={handleChange}
-                placeholder="Ej: Google, Startup Inc"
+                placeholder="Ej: Microsoft, TechCorp"
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -75,21 +83,36 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
                 name="location"
                 value={formData.location}
                 onChange={handleChange}
-                placeholder="Ej: Remoto / Madrid"
+                placeholder="Ej: Bogotá, Madrid, Global"
                 className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Salario (opcional)</label>
-            <input
-              name="salary"
-              value={formData.salary}
-              onChange={handleChange}
-              placeholder="Ej: $2,500 - $3,500 USD"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Modalidad *</label>
+              <select
+                name="job_type"
+                value={formData.job_type}
+                onChange={handleChange}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="Remoto">Remoto 🌐</option>
+                <option value="Presencial">Presencial 🏢</option>
+                <option value="Híbrido">Híbrido 🔄</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Salario (opcional)</label>
+              <input
+                name="salary"
+                value={formData.salary}
+                onChange={handleChange}
+                placeholder="Ej: $3,000 USD"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
           <div>
@@ -100,7 +123,7 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              placeholder="Detalla los requisitos, tareas y beneficios..."
+              placeholder="Detalla las responsabilidades, tecnologías y requisitos..."
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -116,7 +139,7 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer"
             >
               {loading ? "Publicando..." : "Publicar Empleo"}
             </button>

@@ -15,8 +15,10 @@ export default function App() {
   const [selectedJobToApply, setSelectedJobToApply] = useState(null);
   const [selectedJobToViewApps, setSelectedJobToViewApps] = useState(null);
 
+  // Estados de búsqueda y filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [selectedType, setSelectedType] = useState("Todos");
 
   useEffect(() => {
     fetchJobs();
@@ -39,11 +41,9 @@ export default function App() {
     setJobs([created, ...jobs]);
   };
 
-  // Manejo de eliminación en cliente
   const handleDeleteJob = async (jobId) => {
     try {
       await deleteJob(jobId);
-      // Filtramos el empleo eliminado para removerlo del estado inmediatamente
       setJobs(jobs.filter((j) => j.id !== jobId));
     } catch (error) {
       alert("Hubo un error al eliminar la oferta.");
@@ -54,6 +54,7 @@ export default function App() {
     fetchJobs();
   };
 
+  // Filtrado compuesto: Título/Empresa + Ubicación + Modalidad
   const filteredJobs = jobs.filter((job) => {
     const matchesTitleOrCompany =
       job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -63,7 +64,10 @@ export default function App() {
       .toLowerCase()
       .includes(locationFilter.toLowerCase());
 
-    return matchesTitleOrCompany && matchesLocation;
+    const matchesType =
+      selectedType === "Todos" || job.job_type === selectedType;
+
+    return matchesTitleOrCompany && matchesLocation && matchesType;
   });
 
   return (
@@ -97,11 +101,14 @@ export default function App() {
           </p>
         </div>
 
+        {/* Barra de búsqueda con selector de modalidades */}
         <SearchBar
           searchTerm={searchTerm}
           setSearchTerm={setSearchTerm}
           locationFilter={locationFilter}
           setLocationFilter={setLocationFilter}
+          selectedType={selectedType}
+          setSelectedType={setSelectedType}
         />
 
         {loading ? (
@@ -114,7 +121,7 @@ export default function App() {
             <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
             <h3 className="text-lg font-bold text-slate-700">No se encontraron ofertas</h3>
             <p className="text-slate-500 text-sm mt-1">
-              Prueba cambiando los términos de búsqueda o ubicación.
+              Prueba cambiando la modalidad o los términos de búsqueda.
             </p>
           </div>
         ) : (
