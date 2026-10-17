@@ -1,0 +1,29 @@
+# Python y entornos virtuales
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+jobs.db
+*.sqlite3
+
+# Node.js y dependencias de frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Logs y variables de entorno
+.env
+.env.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Configuraciones de editores
+.vscode/
+.idea/
+.DS_Store
