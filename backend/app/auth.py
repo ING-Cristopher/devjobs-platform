@@ -14,11 +14,13 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app import models
+import os
 
-# Clave secreta para firmar los tokens JWT
-SECRET_KEY = "MI_CLAVE_SECRETA_SUPER_SEGURA_PARA_DEVJOBS_2026"
+# En producción se inyecta desde las variables de entorno de Render/Railway
+# Si no existe (desarrollo local), usa la clave por defecto
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "CLAVE_DEV_INSEGURA_SOLO_LOCAL_2026")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas de vigencia
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 # Esquema OAuth2 que espera el token en la cabecera: "Authorization: Bearer <TOKEN>"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")

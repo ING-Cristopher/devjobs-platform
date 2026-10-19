@@ -1,9 +1,10 @@
 /**
  * Archivo: api.js
- * Propósito: Centralizar todas las comunicaciones HTTP con el backend de FastAPI.
+ * Propósito: Centralizar llamadas HTTP adaptándose al entorno (Local vs Producción)
  */
 
-const API_URL = "http://127.0.0.1:8000";
+// Si existe la variable de entorno la usa (Producción), sino usa localhost (Desarrollo local)
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 // ==========================================
 // SERVICIOS DE AUTENTICACIÓN
