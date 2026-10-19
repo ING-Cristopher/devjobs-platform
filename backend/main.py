@@ -27,6 +27,11 @@ app = FastAPI(
     version="2.0.0",
 )
 
+@app.get("/")
+def home():
+    """Ruta básica para verificar que el servicio está activo."""
+    return {"message": "API activa"}
+
 # Habilitamos CORS para desarrollo local
 app.add_middleware(
     CORSMiddleware,

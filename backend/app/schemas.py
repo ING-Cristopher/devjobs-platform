@@ -1,10 +1,9 @@
 """
 Módulo: schemas.py
-Propósito: Validación de datos de entrada y salida mediante Pydantic (Data Transfer Objects).
-Evita que contraseñas u otros datos sensibles salgan expuestos en las respuestas HTTP.
+Propósito: Validación y serialización con Pydantic V2 (usando ConfigDict).
 """
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 from typing import Optional, List
 
@@ -16,31 +15,27 @@ from typing import Optional, List
 class UserBase(BaseModel):
     name: str
     email: EmailStr
-    role: str = "candidato" # Por defecto entra como candidato
+    role: str = "candidato"
 
 
 class UserCreate(UserBase):
-    """Datos necesarios para registrar un usuario (incluye contraseña plana)."""
     password: str
 
 
 class UserLogin(BaseModel):
-    """Datos necesarios para iniciar sesión."""
     email: EmailStr
     password: str
 
 
 class UserResponse(UserBase):
-    """Respuesta pública del usuario: NUNCA expone el campo password."""
     id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    # Sintaxis estándar de Pydantic V2
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TokenResponse(BaseModel):
-    """Respuesta al hacer login con éxito."""
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
@@ -65,8 +60,7 @@ class ApplicationResponse(ApplicationBase):
     job_id: int
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ==========================================
@@ -92,5 +86,4 @@ class JobResponse(JobBase):
     recruiter_id: Optional[int] = None
     applications: List[ApplicationResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
