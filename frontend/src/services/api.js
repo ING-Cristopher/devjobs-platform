@@ -6,6 +6,13 @@ export async function getJobs() {
   return response.json();
 }
 
+// Nueva función: obtener empleo por ID
+export async function getJobById(jobId) {
+  const response = await fetch(`${API_URL}/jobs/${jobId}`);
+  if (!response.ok) throw new Error("Error al obtener el detalle del empleo");
+  return response.json();
+}
+
 export async function createJob(jobData) {
   const response = await fetch(`${API_URL}/jobs`, {
     method: "POST",
@@ -26,7 +33,6 @@ export async function applyToJob(jobId, candidateData) {
   return response.json();
 }
 
-// Nueva función: eliminar oferta laboral
 export async function deleteJob(jobId) {
   const response = await fetch(`${API_URL}/jobs/${jobId}`, {
     method: "DELETE",

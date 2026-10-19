@@ -1,4 +1,5 @@
-import { Building2, MapPin, DollarSign, Calendar, Users, Trash2, Globe2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Building2, MapPin, DollarSign, Calendar, Users, Trash2 } from "lucide-react";
 
 export default function JobCard({ job, onApply, onViewApplications, onDelete }) {
   const dateFormatted = new Date(job.created_at).toLocaleDateString("es-ES", {
@@ -8,7 +9,8 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
 
   const applicantCount = job.applications ? job.applications.length : 0;
 
-  const handleDeleteClick = () => {
+  const handleDeleteClick = (e) => {
+    e.stopPropagation();
     const confirmDelete = window.confirm(
       `¿Estás seguro de que deseas eliminar la oferta "${job.title}"? También se eliminarán sus postulaciones.`
     );
@@ -17,7 +19,6 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
     }
   };
 
-  // Estilo visual del badge según la modalidad
   const getBadgeStyle = (type) => {
     switch (type) {
       case "Remoto":
@@ -36,13 +37,19 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
       <div>
         <div className="flex justify-between items-start mb-3">
           <div className="pr-4">
-            <h3 className="text-xl font-bold text-slate-800">{job.title}</h3>
+            {/* Título enlazado a la página de detalle */}
+            <Link
+              to={`/jobs/${job.id}`}
+              className="text-xl font-bold text-slate-800 hover:text-blue-600 transition-colors block"
+            >
+              {job.title}
+            </Link>
             <div className="flex items-center text-slate-600 gap-1 mt-1 font-medium text-sm">
               <Building2 className="w-4 h-4 text-blue-600" />
               <span>{job.company}</span>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 text-xs text-slate-400">
               <Calendar className="w-3.5 h-3.5" />
@@ -59,7 +66,6 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
         </div>
 
         <div className="flex flex-wrap gap-2 my-4 text-sm">
-          {/* Badge de Modalidad */}
           <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getBadgeStyle(job.job_type)}`}>
             {job.job_type || "Remoto"}
           </span>
@@ -90,12 +96,20 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
         </p>
       </div>
 
-      <button
-        onClick={() => onApply(job)}
-        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 px-4 rounded-lg transition-colors text-sm cursor-pointer"
-      >
-        Postularme
-      </button>
+      <div className="flex gap-2">
+        <Link
+          to={`/jobs/${job.id}`}
+          className="flex-1 text-center border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium py-2 px-3 rounded-lg transition-colors text-sm"
+        >
+          Ver detalles
+        </Link>
+        <button
+          onClick={() => onApply(job)}
+          className="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm cursor-pointer"
+        >
+          Postularme
+        </button>
+      </div>
     </div>
   );
 }
