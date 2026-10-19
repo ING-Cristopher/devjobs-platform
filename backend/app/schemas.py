@@ -49,6 +49,7 @@ class ApplicationBase(BaseModel):
     candidate_name: str
     candidate_email: str
     message: Optional[str] = None
+    cv_url: Optional[str] = None  # <-- NUEVO: URL del archivo PDF
 
 
 class ApplicationCreate(ApplicationBase):

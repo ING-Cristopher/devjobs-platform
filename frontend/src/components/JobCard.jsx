@@ -1,15 +1,24 @@
 /**
  * Archivo: JobCard.jsx
  * Propósito: Tarjeta de presentación de una vacante. Adapta los botones según
- * el rol del usuario autenticado (reclutador vs candidato).
+ * el rol del usuario autenticado (reclutador vs candidato) y permite exportar postulantes a CSV.
  */
 
 import { Link } from "react-router-dom";
-import { Building2, MapPin, DollarSign, Calendar, Users, Trash2 } from "lucide-react";
+import { 
+  Building2, 
+  MapPin, 
+  DollarSign, 
+  Calendar, 
+  Users, 
+  Trash2, 
+  Download 
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { downloadApplicationsCSV } from "../services/api";
 
 export default function JobCard({ job, onApply, onViewApplications, onDelete }) {
-  const { user, isRecruiter } = useAuth();
+  const { user, token } = useAuth();
 
   const dateFormatted = new Date(job.created_at).toLocaleDateString("es-ES", {
     day: "numeric",
@@ -27,6 +36,15 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
     );
     if (confirmDelete) {
       onDelete(job.id);
+    }
+  };
+
+  const handleDownloadCSV = async (e) => {
+    e.stopPropagation();
+    try {
+      await downloadApplicationsCSV(job.id, token);
+    } catch (err) {
+      alert(err.message || "Error al descargar el archivo CSV");
     }
   };
 
@@ -78,7 +96,7 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 my-4 text-sm">
+        <div className="flex flex-wrap gap-2 my-4 text-sm items-center">
           <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getBadgeStyle(job.job_type)}`}>
             {job.job_type || "Remoto"}
           </span>
@@ -95,15 +113,29 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
             </div>
           )}
 
-          {/* El botón para ver postulantes solo lo ve el reclutador de la vacante */}
+          {/* Opciones exclusivas del reclutador dueño */}
           {isOwner && (
-            <button
-              onClick={() => onViewApplications(job)}
-              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-medium text-xs transition-colors cursor-pointer"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>{applicantCount} postulante{applicantCount !== 1 ? "s" : ""}</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => onViewApplications(job)}
+                className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-medium text-xs transition-colors cursor-pointer"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>{applicantCount} postulante{applicantCount !== 1 ? "s" : ""}</span>
+              </button>
+
+              {/* Botón para exportar CSV si hay candidatos */}
+              {applicantCount > 0 && (
+                <button
+                  onClick={handleDownloadCSV}
+                  title="Exportar postulantes a CSV"
+                  className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium text-xs transition-colors cursor-pointer border border-emerald-200"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>CSV</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
 

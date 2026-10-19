@@ -68,7 +68,9 @@ class Application(Base):
     candidate_name = Column(String, nullable=False)
     candidate_email = Column(String, nullable=False)
     message = Column(Text, nullable=True)
+    cv_url = Column(String, nullable=True)  # <-- NUEVO: Ruta o URL del archivo PDF
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relación hacia el empleo al que pertenece esta postulación
     job = relationship("Job", back_populates="applications")
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)

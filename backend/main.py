@@ -8,6 +8,14 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
+import io
+import csv
+from fastapi.responses import StreamingResponse
+import os
+import shutil
+import uuid
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
+from fastapi.staticfiles import StaticFiles
 
 from app.database import engine, Base, get_db
 from app import models, schemas
@@ -26,6 +34,14 @@ app = FastAPI(
     description="Backend robusto para plataforma de empleos con autenticación JWT y roles.",
     version="2.0.0",
 )
+
+# Crear carpeta de subidas si no existe
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Montar los estáticos para servir los PDFs
+# Ejemplo de acceso: http://127.0.0.1:8000/uploads/archivo.pdf
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 @app.get("/")
 def home():
@@ -169,20 +185,113 @@ def delete_job(
 # RUTAS DE POSTULACIONES
 # ==========================================
 
-@app.post("/jobs/{job_id}/apply", response_model=schemas.ApplicationResponse)
-def apply_to_job(job_id: int, application: schemas.ApplicationCreate, db: Session = Depends(get_db)):
-    """Cualquier candidato puede postularse a un empleo existente."""
+@app.post("/jobs/{job_id}/apply", status_code=status.HTTP_201_CREATED)
+async def apply_to_job(
+    job_id: int,
+    candidate_name: str = Form(...),
+    candidate_email: str = Form(...),
+    message: Optional[str] = Form(None),
+    cv_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Registra una postulación a una vacante con opción de adjuntar CV en PDF.
+    """
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Oferta laboral no encontrada")
 
-    new_app = models.Application(
+    cv_url = None
+
+    # Si el usuario subió un archivo, validamos y guardamos
+    if cv_file and cv_file.filename:
+        # Validación de extensión y tipo de contenido
+        if not cv_file.filename.lower().endswith(".pdf") or cv_file.content_type != "application/pdf":
+            raise HTTPException(
+                status_code=400,
+                detail="Formato inválido. Solo se admiten archivos en formato PDF."
+            )
+
+        # Generar nombre único para evitar colisiones de archivos
+        file_extension = ".pdf"
+        unique_filename = f"{uuid.uuid4().hex}_{cv_file.filename.replace(' ', '_')}"
+        file_path = os.path.join(UPLOAD_DIR, unique_filename)
+
+        # Guardar en disco
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(cv_file.file, buffer)
+
+        # Generamos la URL relativa que se guardará en la base de datos
+        cv_url = f"/uploads/{unique_filename}"
+
+    # Crear la postulación
+    new_application = models.Application(
         job_id=job_id,
-        candidate_name=application.candidate_name,
-        candidate_email=application.candidate_email,
-        message=application.message,
+        candidate_name=candidate_name,
+        candidate_email=candidate_email,
+        message=message,
+        cv_url=cv_url
     )
-    db.add(new_app)
+
+    db.add(new_application)
     db.commit()
-    db.refresh(new_app)
-    return new_app
+    db.refresh(new_application)
+
+    return new_application
+
+
+# ==========================================
+# EXPORTACIÓN DE CANDIDATOS A CSV
+# ==========================================
+
+@app.get("/jobs/{job_id}/applications/csv")
+def export_applications_csv(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """
+    Genera y descarga un archivo CSV con todos los postulantes de una vacante.
+    Solo el reclutador dueño de la oferta puede exportar los datos.
+    """
+    # 1. Verificar existencia de la oferta
+    job = db.query(models.Job).filter(models.Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Oferta laboral no encontrada")
+
+    # 2. Verificar permisos del reclutador
+    if job.recruiter_id != current_user.id:
+        raise HTTPException(
+            status_code=403, 
+            detail="No tienes autorización para exportar los postulantes de esta oferta"
+        )
+
+    # 3. Construir el archivo CSV en memoria
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Encabezados del reporte
+    writer.writerow(["ID Postulacion", "Candidato", "Correo Electronico", "Mensaje / Portafolio", "Fecha Postulacion"])
+
+    # Escribir los registros de postulantes
+    for app_item in job.applications:
+        writer.writerow([
+            app_item.id,
+            app_item.candidate_name,
+            app_item.candidate_email,
+            app_item.message or "Sin mensaje",
+            app_item.created_at.strftime("%Y-%m-%d %H:%M:%S") if app_item.created_at else ""
+        ])
+
+    output.seek(0)
+
+    # Limpiar el título para el nombre del archivo
+    safe_title = "".join(c for c in job.title if c.isalnum() or c in (" ", "-", "_")).rstrip()
+    filename = f"postulantes_{safe_title.replace(' ', '_')}_{job.id}.csv"
+
+    # Retornar el flujo con cabeceras de descarga de archivo
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

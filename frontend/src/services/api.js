@@ -102,16 +102,48 @@ export async function deleteJob(jobId, token) {
 // SERVICIOS DE POSTULACIÓN
 // ==========================================
 
-export async function applyToJob(jobId, candidateData) {
+/**
+ * Envía una postulación utilizando FormData para admitir archivos PDF.
+ */
+export async function applyToJob(jobId, formDataPayload) {
+  // Nota: Al usar FormData, NO se define manualmente 'Content-Type'
+  // El navegador añade automáticamente 'multipart/form-data' con su boundary.
   const response = await fetch(`${API_URL}/jobs/${jobId}/apply`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(candidateData),
+    body: formDataPayload,
   });
 
-  const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.detail || "Error al enviar la postulación");
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Error al enviar la postulación");
   }
-  return data;
+
+  return await response.json();
+}
+
+/**
+ * Descarga el archivo CSV de postulantes adjuntando el token JWT.
+ */
+export async function downloadApplicationsCSV(jobId, token) {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/applications/csv`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || "Error al descargar el reporte CSV");
+  }
+
+  // Convertir respuesta a Blob para iniciar la descarga en el navegador
+  const blob = await response.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = `candidatos_vacante_${jobId}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(downloadUrl);
 }
