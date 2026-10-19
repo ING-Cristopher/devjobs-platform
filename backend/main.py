@@ -7,7 +7,7 @@ orquesta la base de datos, autenticación y lógica de negocio.
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import io
 import csv
 from fastapi.responses import StreamingResponse
