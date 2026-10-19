@@ -21,7 +21,7 @@
 DevJobs es una solución web para conectar talento tecnológico con empresas reclutadoras. Construida bajo una arquitectura desacoplada y orientada a servicios, cuenta con control de acceso basado en roles (RBAC), filtros reactivos en tiempo real y pruebas automatizadas en la nube.
 
 <div align="center">
-  <img src="./docs/screenshots/app-preview.png" alt="DevJobs Feed Principal" width="90%">
+  <img src="./docs/screenshots/app-preview.png.png" alt="DevJobs Feed Principal" width="90%">
 </div>
 
 ---
@@ -50,10 +50,10 @@ DevJobs es una solución web para conectar talento tecnológico con empresas rec
   </tr>
   <tr>
     <td>
-      <img src="./docs/screenshots/swagger-api.png" alt="Swagger Docs">
+      <img src="./docs/screenshots/swagger-api.png.png" alt="Swagger Docs">
     </td>
     <td>
-      <img src="./docs/screenshots/ci-pipeline.png" alt="GitHub Actions CI">
+      <img src="./docs/screenshots/ci-pipeline.png.png" alt="GitHub Actions CI">
     </td>
   </tr>
   <tr>
