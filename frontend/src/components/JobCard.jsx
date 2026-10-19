@@ -1,18 +1,29 @@
+/**
+ * Archivo: JobCard.jsx
+ * Propósito: Tarjeta de presentación de una vacante. Adapta los botones según
+ * el rol del usuario autenticado (reclutador vs candidato).
+ */
+
 import { Link } from "react-router-dom";
 import { Building2, MapPin, DollarSign, Calendar, Users, Trash2 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export default function JobCard({ job, onApply, onViewApplications, onDelete }) {
+  const { user, isRecruiter } = useAuth();
+
   const dateFormatted = new Date(job.created_at).toLocaleDateString("es-ES", {
     day: "numeric",
     month: "short",
   });
 
   const applicantCount = job.applications ? job.applications.length : 0;
+  // Comprobamos si el usuario actual es el dueño de esta vacante
+  const isOwner = user && job.recruiter_id === user.id;
 
   const handleDeleteClick = (e) => {
     e.stopPropagation();
     const confirmDelete = window.confirm(
-      `¿Estás seguro de que deseas eliminar la oferta "${job.title}"? También se eliminarán sus postulaciones.`
+      `¿Estás seguro de eliminar la vacante "${job.title}"?`
     );
     if (confirmDelete) {
       onDelete(job.id);
@@ -37,7 +48,6 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
       <div>
         <div className="flex justify-between items-start mb-3">
           <div className="pr-4">
-            {/* Título enlazado a la página de detalle */}
             <Link
               to={`/jobs/${job.id}`}
               className="text-xl font-bold text-slate-800 hover:text-blue-600 transition-colors block"
@@ -55,13 +65,16 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
               <Calendar className="w-3.5 h-3.5" />
               {dateFormatted}
             </span>
-            <button
-              onClick={handleDeleteClick}
-              title="Eliminar vacante"
-              className="text-slate-300 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {/* Solo el reclutador dueño puede ver el botón de borrar */}
+            {isOwner && (
+              <button
+                onClick={handleDeleteClick}
+                title="Eliminar vacante"
+                className="text-slate-300 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -82,13 +95,16 @@ export default function JobCard({ job, onApply, onViewApplications, onDelete }) 
             </div>
           )}
 
-          <button
-            onClick={() => onViewApplications(job)}
-            className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-medium text-xs transition-colors cursor-pointer"
-          >
-            <Users className="w-3.5 h-3.5" />
-            <span>{applicantCount} postulante{applicantCount !== 1 ? "s" : ""}</span>
-          </button>
+          {/* El botón para ver postulantes solo lo ve el reclutador de la vacante */}
+          {isOwner && (
+            <button
+              onClick={() => onViewApplications(job)}
+              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-medium text-xs transition-colors cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>{applicantCount} postulante{applicantCount !== 1 ? "s" : ""}</span>
+            </button>
+          )}
         </div>
 
         <p className="text-slate-600 text-sm line-clamp-3 mb-5 whitespace-pre-line">

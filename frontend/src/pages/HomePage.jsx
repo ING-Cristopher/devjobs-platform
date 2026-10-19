@@ -1,5 +1,11 @@
+/**
+ * Archivo: HomePage.jsx
+ * Propósito: Página de inicio con buscador, filtros y catálogo de vacantes.
+ */
+
 import { useEffect, useState } from "react";
 import { getJobs, createJob, deleteJob } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import JobCard from "../components/JobCard";
 import JobFormModal from "../components/JobFormModal";
 import SearchBar from "../components/SearchBar";
@@ -8,6 +14,7 @@ import ApplicationsModal from "../components/ApplicationsModal";
 import { Loader2, Briefcase } from "lucide-react";
 
 export default function HomePage({ isModalOpen, setIsModalOpen }) {
+  const { token } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,16 +42,18 @@ export default function HomePage({ isModalOpen, setIsModalOpen }) {
   };
 
   const handleCreateJob = async (newJobData) => {
-    const created = await createJob(newJobData);
+    // Enviamos el token del reclutador
+    const created = await createJob(newJobData, token);
     setJobs([created, ...jobs]);
   };
 
   const handleDeleteJob = async (jobId) => {
     try {
-      await deleteJob(jobId);
+      // Enviamos el token para autenticar el borrado
+      await deleteJob(jobId, token);
       setJobs(jobs.filter((j) => j.id !== jobId));
     } catch (error) {
-      alert("Hubo un error al eliminar la oferta.");
+      alert(error.message);
     }
   };
 
