@@ -1,4 +1,11 @@
-import { X, Mail, Calendar, User, MessageSquare, FileText, ExternalLink } from "lucide-react";
+import {
+  Mail,
+  Calendar,
+  User,
+  MessageSquare,
+  FileText,
+  ExternalLink,
+} from "lucide-react";
 
 export default function ApplicationsModal({ job, isOpen, onClose }) {
   if (!isOpen || !job) return null;
@@ -7,58 +14,84 @@ export default function ApplicationsModal({ job, isOpen, onClose }) {
   const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl w-full max-w-xl p-6 shadow-xl relative max-h-[85vh] flex flex-col">
+    <div className="chamba-modal-backdrop" onClick={onClose}>
+      <div
+        className="chamba-modal max-w-xl max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Encabezado */}
-        <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+        <div
+          className="flex justify-between items-start pb-4"
+          style={{ borderBottom: "1px solid var(--line)" }}
+        >
           <div>
-            <h2 className="text-xl font-bold text-slate-800">
+            <h2 className="text-xl font-extrabold">
               Postulantes ({job.applications ? job.applications.length : 0})
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Vacante: <span className="font-semibold text-blue-600">{job.title}</span> — {job.company}
+            <p className="meta mt-1">
+              Vacante:{" "}
+              <span style={{ color: "var(--blue)", fontWeight: 700 }}>
+                {job.title}
+              </span>{" "}
+              — {job.company}
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+            className="x"
+            aria-label="Cerrar"
           >
-            <X className="w-5 h-5" />
+            ✕
           </button>
         </div>
 
         {/* Lista de candidatos */}
         <div className="overflow-y-auto py-4 space-y-3 flex-1 pr-1">
           {!job.applications || job.applications.length === 0 ? (
-            <div className="text-center py-10 text-slate-400">
-              <User className="w-12 h-12 mx-auto mb-2 text-slate-300" />
-              <p className="text-sm font-medium">Aún no hay candidatos postulados</p>
+            <div className="empty">
+              <User className="w-10 h-10 mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">
+                Aún no hay candidatos postulados
+              </p>
             </div>
           ) : (
             job.applications.map((app) => (
               <div
                 key={app.id}
-                className="p-4 border border-slate-200 rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                className="p-4 rounded-2xl"
+                style={{
+                  background: "var(--bg)",
+                  border: "1px solid var(--line)",
+                }}
               >
                 <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="logo-sq"
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "10px",
+                        fontSize: "16px",
+                        background: "var(--sun)",
+                      }}
+                    >
                       {app.candidate_name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-slate-800">
-                        {app.candidate_name}
-                      </h4>
+                      <h4 className="text-sm font-bold">{app.candidate_name}</h4>
                       <a
                         href={`mailto:${app.candidate_email}`}
-                        className="flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600"
+                        className="flex items-center gap-1 text-xs hover:underline"
+                        style={{ color: "var(--muted)" }}
                       >
                         <Mail className="w-3 h-3" />
                         {app.candidate_email}
                       </a>
                     </div>
                   </div>
-                  <span className="flex items-center gap-1 text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1 text-xs meta">
                     <Calendar className="w-3 h-3" />
                     {new Date(app.created_at).toLocaleDateString("es-ES", {
                       day: "numeric",
@@ -68,27 +101,45 @@ export default function ApplicationsModal({ job, isOpen, onClose }) {
                 </div>
 
                 {app.message && (
-                  <div className="mt-3 text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100 flex items-start gap-2">
-                    <MessageSquare className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                    <p className="whitespace-pre-line leading-relaxed">{app.message}</p>
+                  <div
+                    className="mt-3 text-xs p-3 rounded-xl flex items-start gap-2"
+                    style={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--line)",
+                    }}
+                  >
+                    <MessageSquare
+                      className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                      style={{ color: "var(--muted)" }}
+                    />
+                    <p className="whitespace-pre-line leading-relaxed">
+                      {app.message}
+                    </p>
                   </div>
                 )}
 
                 {/* VISUALIZACIÓN / DESCARGA DEL CV EN PDF */}
-                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                <div
+                  className="mt-3 pt-2.5 flex items-center justify-between"
+                  style={{ borderTop: "1px solid var(--line)" }}
+                >
                   {app.cv_url ? (
                     <a
                       href={`${API_URL}${app.cv_url}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-xs font-semibold border border-blue-200 transition-colors cursor-pointer"
+                      className="tag on"
+                      style={{
+                        textDecoration: "none",
+                        padding: "5px 12px",
+                      }}
                     >
                       <FileText className="w-3.5 h-3.5" />
                       <span>Ver CV Adjunto (PDF)</span>
-                      <ExternalLink className="w-3 h-3 text-blue-500" />
+                      <ExternalLink className="w-3 h-3" />
                     </a>
                   ) : (
-                    <span className="text-xs text-slate-400 italic">
+                    <span className="text-xs italic meta">
                       Sin CV en PDF adjunto
                     </span>
                   )}
@@ -99,11 +150,11 @@ export default function ApplicationsModal({ job, isOpen, onClose }) {
         </div>
 
         {/* Pie del modal */}
-        <div className="pt-3 border-t border-slate-100 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-          >
+        <div
+          className="pt-3 flex justify-end"
+          style={{ borderTop: "1px solid var(--line)" }}
+        >
+          <button type="button" onClick={onClose} className="btn ghost">
             Cerrar
           </button>
         </div>

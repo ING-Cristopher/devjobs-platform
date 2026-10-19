@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { X, Send, CheckCircle2, Upload } from "lucide-react";
+import { Send, CheckCircle2, Upload } from "lucide-react";
 import { applyToJob } from "../services/api";
 
-export default function ApplyModal({ job, isOpen, onClose }) {
+export default function ApplyModal({ job, isOpen, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
     candidate_name: "",
     candidate_email: "",
@@ -21,7 +21,10 @@ export default function ApplyModal({ job, isOpen, onClose }) {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      if (
+        file.type !== "application/pdf" &&
+        !file.name.toLowerCase().endsWith(".pdf")
+      ) {
         alert("Por favor selecciona un archivo PDF válido.");
         e.target.value = "";
         setCvFile(null);
@@ -51,13 +54,14 @@ export default function ApplyModal({ job, isOpen, onClose }) {
 
       await applyToJob(job.id, data);
 
+      if (onSuccess) onSuccess(job.company);
       setSubmitted(true);
       setTimeout(() => {
         setSubmitted(false);
         setFormData({ candidate_name: "", candidate_email: "", message: "" });
         setCvFile(null);
         onClose();
-      }, 2000);
+      }, 1800);
     } catch (err) {
       alert(err.message || "Hubo un error al enviar tu postulación");
     } finally {
@@ -66,35 +70,54 @@ export default function ApplyModal({ job, isOpen, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
+    <div className="chamba-modal-backdrop" onClick={onClose}>
+      <div
+        className="chamba-modal max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
         {submitted ? (
           <div className="py-8 text-center space-y-3">
-            <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto animate-bounce" />
-            <h3 className="text-xl font-bold text-slate-800">¡Postulación enviada con éxito!</h3>
-            <p className="text-sm text-slate-500">
-              La empresa revisará tus datos y CV en breve.
+            <CheckCircle2
+              className="w-16 h-16 mx-auto animate-bounce"
+              style={{ color: "var(--mint)" }}
+            />
+            <h3 className="text-xl font-extrabold">
+              ¡Postulación enviada con éxito!
+            </h3>
+            <p className="meta">
+              {job.company} revisará tus datos y CV en breve.
             </p>
           </div>
         ) : (
           <>
-            <div className="mb-5">
-              <h2 className="text-lg font-bold text-slate-800">
-                Postularme a {job.title}
-              </h2>
-              <p className="text-xs text-blue-600 font-medium">{job.company}</p>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-xl font-extrabold">
+                  Postularme a {job.title}
+                </h2>
+                <p
+                  className="text-sm font-bold mt-1"
+                  style={{ color: "var(--blue)" }}
+                >
+                  {job.company}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="x"
+                aria-label="Cerrar"
+              >
+                ✕
+              </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                <label
+                  className="block text-xs font-bold mb-1"
+                  style={{ color: "var(--muted)" }}
+                >
                   Nombre Completo *
                 </label>
                 <input
@@ -103,12 +126,15 @@ export default function ApplyModal({ job, isOpen, onClose }) {
                   value={formData.candidate_name}
                   onChange={handleChange}
                   placeholder="Ej: Ana Pérez"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="chamba-input"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                <label
+                  className="block text-xs font-bold mb-1"
+                  style={{ color: "var(--muted)" }}
+                >
                   Correo Electrónico *
                 </label>
                 <input
@@ -118,12 +144,15 @@ export default function ApplyModal({ job, isOpen, onClose }) {
                   value={formData.candidate_email}
                   onChange={handleChange}
                   placeholder="ana@ejemplo.com"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="chamba-input"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                <label
+                  className="block text-xs font-bold mb-1"
+                  style={{ color: "var(--muted)" }}
+                >
                   Mensaje / Enlace de Portafolio
                 </label>
                 <textarea
@@ -132,41 +161,42 @@ export default function ApplyModal({ job, isOpen, onClose }) {
                   value={formData.message}
                   onChange={handleChange}
                   placeholder="Escribe un breve mensaje o notas sobre tu perfil..."
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="chamba-input"
                 />
               </div>
 
               {/* CAMPO DE SUBIDA DE CV EN PDF */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">
+                <label
+                  className="block text-xs font-bold mb-1"
+                  style={{ color: "var(--muted)" }}
+                >
                   Currículum Vitae (PDF opcional)
                 </label>
-                <div className="relative border border-slate-300 rounded-lg p-2.5 bg-slate-50 hover:bg-slate-100 transition-colors flex items-center gap-2">
-                  <Upload className="w-4 h-4 text-slate-500 shrink-0" />
+                <div
+                  className="chamba-input flex items-center gap-2"
+                  style={{ padding: "8px 12px" }}
+                >
+                  <Upload
+                    className="w-4 h-4 shrink-0"
+                    style={{ color: "var(--muted)" }}
+                  />
                   <input
                     type="file"
                     accept=".pdf,application/pdf"
                     onChange={handleFileChange}
-                    className="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                    className="w-full text-xs cursor-pointer"
                   />
                 </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                >
+                <button type="button" onClick={onClose} className="btn ghost">
                   Cancelar
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                >
+                <button type="submit" disabled={loading} className="btn">
                   <Send className="w-4 h-4" />
-                  {loading ? "Enviando..." : "Enviar Postulación"}
+                  <span>{loading ? "Enviando..." : "Enviar postulación"}</span>
                 </button>
               </div>
             </form>

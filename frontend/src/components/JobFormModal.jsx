@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X } from "lucide-react";
+import { BASE_SKILLS } from "../utils/skills";
 
 export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
   const [formData, setFormData] = useState({
@@ -10,6 +10,7 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
     salary: "",
     description: "",
   });
+  const [selectedSkills, setSelectedSkills] = useState([]);
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -18,11 +19,28 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const toggleSkill = (skill) => {
+    setSelectedSkills((prev) =>
+      prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]
+    );
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await onJobCreated(formData);
+      let finalDescription = formData.description.trim();
+      if (
+        selectedSkills.length > 0 &&
+        !/habilidades\s*:/i.test(finalDescription)
+      ) {
+        finalDescription = `${finalDescription}\n\nHabilidades: ${selectedSkills.join(", ")}`;
+      }
+
+      await onJobCreated({
+        ...formData,
+        description: finalDescription,
+      });
       onClose();
       setFormData({
         title: "",
@@ -32,91 +50,130 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
         salary: "",
         description: "",
       });
+      setSelectedSkills([]);
     } catch (error) {
-      alert("Hubo un error al guardar el empleo");
+      alert(error.message || "Hubo un error al guardar el empleo");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <h2 className="text-xl font-bold text-slate-800 mb-4">Publicar un nuevo empleo</h2>
+    <div className="chamba-modal-backdrop" onClick={onClose}>
+      <div
+        className="chamba-modal max-w-lg max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-extrabold">Publicar vacante</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="x"
+            aria-label="Cerrar"
+          >
+            ✕
+          </button>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Título del puesto *</label>
+            <label className="block text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>
+              Título del puesto *
+            </label>
             <input
               required
               name="title"
               value={formData.title}
               onChange={handleChange}
-              placeholder="Ej: Desarrollador Backend Python"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Ej: Desarrollador/a Frontend"
+              className="chamba-input"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Empresa *</label>
+              <label className="block text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>
+                Empresa *
+              </label>
               <input
                 required
                 name="company"
                 value={formData.company}
                 onChange={handleChange}
-                placeholder="Ej: Microsoft, TechCorp"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: Banreservas Digital"
+                className="chamba-input"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Ubicación *</label>
+              <label className="block text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>
+                Ubicación *
+              </label>
               <input
                 required
                 name="location"
                 value={formData.location}
                 onChange={handleChange}
-                placeholder="Ej: Bogotá, Madrid, Global"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: Santo Domingo, Remoto"
+                className="chamba-input"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Modalidad *</label>
+              <label className="block text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>
+                Modalidad *
+              </label>
               <select
                 name="job_type"
                 value={formData.job_type}
                 onChange={handleChange}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="chamba-input"
               >
-                <option value="Remoto">Remoto 🌐</option>
-                <option value="Presencial">Presencial 🏢</option>
-                <option value="Híbrido">Híbrido 🔄</option>
+                <option value="Remoto">Remoto</option>
+                <option value="Híbrido">Híbrido</option>
+                <option value="Presencial">Presencial</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Salario (opcional)</label>
+              <label className="block text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>
+                Salario (opcional)
+              </label>
               <input
                 name="salary"
                 value={formData.salary}
                 onChange={handleChange}
-                placeholder="Ej: $3,000 USD"
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ej: RD$ 85–110 mil"
+                className="chamba-input"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Descripción del rol *</label>
+            <label className="block text-xs font-bold mb-1.5" style={{ color: "var(--muted)" }}>
+              Habilidades clave (opcional)
+            </label>
+            <div className="chips">
+              {BASE_SKILLS.map((skill) => (
+                <button
+                  key={skill}
+                  type="button"
+                  className="chip"
+                  style={{ padding: "4px 10px", fontSize: "12px" }}
+                  aria-pressed={selectedSkills.includes(skill)}
+                  onClick={() => toggleSkill(skill)}
+                >
+                  {skill}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold mb-1" style={{ color: "var(--muted)" }}>
+              Descripción del rol *
+            </label>
             <textarea
               required
               rows={4}
@@ -124,24 +181,16 @@ export default function JobFormModal({ isOpen, onClose, onJobCreated }) {
               value={formData.description}
               onChange={handleChange}
               placeholder="Detalla las responsabilidades, tecnologías y requisitos..."
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="chamba-input"
             />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
+            <button type="button" onClick={onClose} className="btn ghost">
               Cancelar
             </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer"
-            >
-              {loading ? "Publicando..." : "Publicar Empleo"}
+            <button type="submit" disabled={loading} className="btn">
+              {loading ? "Publicando..." : "Publicar vacante"}
             </button>
           </div>
         </form>

@@ -1,16 +1,15 @@
 /**
  * Archivo: AuthModal.jsx
- * Propósito: Formulario modal conmutable para iniciar sesión o registrarse.
+ * Propósito: Formulario modal conmutable para iniciar sesión o registrarse con estética Chamba.
  */
 
 import { useState } from "react";
-import { X, Lock, Mail, User, Briefcase, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { registerUser, loginUser } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
 export default function AuthModal({ isOpen, onClose }) {
   const { login } = useAuth();
-  // Estado para alternar entre login y registro
   const [isRegister, setIsRegister] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,14 +18,14 @@ export default function AuthModal({ isOpen, onClose }) {
     name: "",
     email: "",
     password: "",
-    role: "candidato", // Por defecto candidato
+    role: "candidato",
   });
 
   if (!isOpen) return null;
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError(""); // Limpia el error al escribir
+    setError("");
   };
 
   const handleSubmit = async (e) => {
@@ -36,16 +35,13 @@ export default function AuthModal({ isOpen, onClose }) {
 
     try {
       if (isRegister) {
-        // 1. Registro en la base de datos
         await registerUser(formData);
-        // 2. Login automático tras registrarse
         const authData = await loginUser({
           email: formData.email,
           password: formData.password,
         });
         login(authData.access_token, authData.user);
       } else {
-        // Inicio de sesión normal
         const authData = await loginUser({
           email: formData.email,
           password: formData.password,
@@ -61,26 +57,41 @@ export default function AuthModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <h2 className="text-xl font-bold text-slate-800 mb-1">
-          {isRegister ? "Crear una cuenta" : "Iniciar Sesión"}
-        </h2>
-        <p className="text-xs text-slate-500 mb-4">
-          {isRegister
-            ? "Únete para publicar vacantes o gestionar tu carrera."
-            : "Ingresa tus credenciales para acceder a DevJobs."}
-        </p>
+    <div className="chamba-modal-backdrop" onClick={onClose}>
+      <div
+        className="chamba-modal max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-2xl font-extrabold">
+              {isRegister ? "Crear una cuenta" : "Iniciar sesión"}
+            </h2>
+            <p className="meta mt-1">
+              {isRegister
+                ? "Únete a Chamba para publicar vacantes o postularte."
+                : "Ingresa tus credenciales para acceder a Chamba."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="x"
+            aria-label="Cerrar"
+          >
+            ✕
+          </button>
+        </div>
 
         {error && (
-          <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-lg flex items-center gap-2">
+          <div
+            className="mb-4 text-xs p-3 rounded-xl flex items-center gap-2"
+            style={{
+              background: "#ff8f7a",
+              color: "#0e1330",
+              fontWeight: 700,
+            }}
+          >
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -89,106 +100,107 @@ export default function AuthModal({ isOpen, onClose }) {
         <form onSubmit={handleSubmit} className="space-y-3">
           {isRegister && (
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
+              <label
+                className="block text-xs font-bold mb-1"
+                style={{ color: "var(--muted)" }}
+              >
                 Nombre Completo
               </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                <input
-                  required
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="Ej: Laura Martínez"
-                  className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              <input
+                required
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Ej: Laura Martínez"
+                className="chamba-input"
+              />
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">
+            <label
+              className="block text-xs font-bold mb-1"
+              style={{ color: "var(--muted)" }}
+            >
               Correo Electrónico
             </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                required
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                placeholder="tu@email.com"
-                className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            <input
+              required
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="tu@email.com"
+              className="chamba-input"
+            />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">
+            <label
+              className="block text-xs font-bold mb-1"
+              style={{ color: "var(--muted)" }}
+            >
               Contraseña
             </label>
-            <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                required
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="••••••••"
-                className="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            <input
+              required
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="••••••••"
+              className="chamba-input"
+            />
           </div>
 
           {isRegister && (
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">
+              <label
+                className="block text-xs font-bold mb-1.5"
+                style={{ color: "var(--muted)" }}
+              >
                 ¿Cuál es tu objetivo?
               </label>
-              <div className="grid grid-cols-2 gap-2 mt-1">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, role: "candidato" })}
-                  className={`py-2 px-3 rounded-lg border text-xs font-medium transition-colors ${
-                    formData.role === "candidato"
-                      ? "border-blue-600 bg-blue-50 text-blue-700 font-bold"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
+                  aria-pressed={formData.role === "candidato"}
+                  onClick={() =>
+                    setFormData({ ...formData, role: "candidato" })
+                  }
+                  className="chip text-center"
                 >
                   Buscar Empleo
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormData({ ...formData, role: "reclutador" })}
-                  className={`py-2 px-3 rounded-lg border text-xs font-medium transition-colors ${
-                    formData.role === "reclutador"
-                      ? "border-blue-600 bg-blue-50 text-blue-700 font-bold"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
+                  aria-pressed={formData.role === "reclutador"}
+                  onClick={() =>
+                    setFormData({ ...formData, role: "reclutador" })
+                  }
+                  className="chip text-center"
                 >
-                  Publicar Empleos
+                  Publicar Vacantes
                 </button>
               </div>
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors"
-          >
-            {loading
-              ? "Procesando..."
-              : isRegister
-              ? "Registrarme"
-              : "Ingresar"}
-          </button>
+          <div className="pt-2">
+            <button type="submit" disabled={loading} className="btn w-full">
+              {loading
+                ? "Procesando..."
+                : isRegister
+                ? "Registrarme"
+                : "Ingresar"}
+            </button>
+          </div>
         </form>
 
-        {/* Alternar entre login y registro */}
-        <div className="mt-4 pt-3 border-t border-slate-100 text-center text-xs text-slate-500">
+        <div
+          className="mt-4 pt-3 text-center text-xs meta"
+          style={{ borderTop: "1px solid var(--line)" }}
+        >
           {isRegister ? (
             <span>
               ¿Ya tienes cuenta?{" "}
@@ -198,7 +210,13 @@ export default function AuthModal({ isOpen, onClose }) {
                   setIsRegister(false);
                   setError("");
                 }}
-                className="text-blue-600 font-bold hover:underline"
+                style={{
+                  color: "var(--blue)",
+                  fontWeight: 700,
+                  background: "none",
+                  border: 0,
+                  textDecoration: "underline",
+                }}
               >
                 Inicia sesión aquí
               </button>
@@ -212,7 +230,13 @@ export default function AuthModal({ isOpen, onClose }) {
                   setIsRegister(true);
                   setError("");
                 }}
-                className="text-blue-600 font-bold hover:underline"
+                style={{
+                  color: "var(--blue)",
+                  fontWeight: 700,
+                  background: "none",
+                  border: 0,
+                  textDecoration: "underline",
+                }}
               >
                 Crea una gratis
               </button>
