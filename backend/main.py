@@ -2,7 +2,7 @@
 Módulo: main.py
 Propósito: Servidor principal FastAPI. Configura CORS, expone las rutas REST y 
 orquesta la base de datos, autenticación JWT, políticas OWASP, verificación de correo
-por token y panel de administración (rol 'admin').
+por código numérico de 6 dígitos (15 min) y postulación restringida a usuarios autenticados.
 """
 
 import csv
@@ -11,23 +11,8 @@ import os
 import shutil
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
-
-def load_env_file():
-    """Carga variables desde backend/.env si existe."""
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    if os.path.isfile(env_path):
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, val = line.split("=", 1)
-                    key = key.strip()
-                    val = val.strip().strip("'\"")
-                    if key and key not in os.environ:
-                        os.environ[key] = val
-
-load_env_file()
 
 from fastapi import (
     BackgroundTasks,
@@ -45,6 +30,22 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
+def load_env_file():
+    """Carga variables desde backend/.env si existe."""
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.isfile(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, val = line.split("=", 1)
+                    key = key.strip()
+                    val = val.strip().strip("'\"")
+                    if key and key not in os.environ:
+                        os.environ[key] = val
+
+load_env_file()
+
 from app import models, schemas
 from app.auth import (
     create_access_token,
@@ -55,8 +56,8 @@ from app.auth import (
 )
 from app.database import Base, SessionLocal, engine, get_db
 from app.email_service import (
-    generate_verification_token,
-    send_verification_email_task,
+    generate_verification_code,
+    send_verification_code_email_task,
     is_smtp_configured,
 )
 from seed_admin import init_db, seed_admin_user
@@ -77,8 +78,8 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="DevJobs / Chamba API",
-    description="Backend robusto con políticas OWASP, verificación por correo y rol de Administrador.",
-    version="2.1.0",
+    description="Backend robusto con políticas OWASP, verificación por código de 6 dígitos y postulaciones autenticadas.",
+    version="2.2.0",
     lifespan=lifespan,
 )
 
@@ -122,7 +123,8 @@ def register(
 ):
     """
     Registra una nueva cuenta de usuario aplicando validación OWASP de contraseña.
-    Genera un token único de verificación y envía el correo de forma asíncrona.
+    Genera un código numérico aleatorio de 6 dígitos (válido por 15 min) y envía el correo de forma asíncrona.
+    NO se emite sesión ni se activa la cuenta hasta que el usuario ingrese el código.
     """
     existing_user = (
         db.query(models.User).filter(models.User.email == user_data.email).first()
@@ -133,7 +135,8 @@ def register(
             detail="Ya existe una cuenta registrada con este correo electrónico",
         )
 
-    token = generate_verification_token()
+    code = generate_verification_code()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
     new_user = models.User(
         name=user_data.name,
@@ -141,61 +144,90 @@ def register(
         hashed_password=hash_password(user_data.password),
         role=user_data.role,  # 'reclutador' o 'candidato'
         is_verified=False,
-        verification_token=token,
+        verification_code=code,
+        verification_code_expires_at=expires_at,
+        verification_token=None,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # Envío asíncrono del enlace de confirmación (/auth/verify?token=...)
+    # Envío asíncrono del correo con el código numérico de 6 dígitos
     background_tasks.add_task(
-        send_verification_email_task, new_user.email, new_user.name, token
+        send_verification_code_email_task, new_user.email, new_user.name, code
     )
 
-    # Si estamos en modo local (sin SMTP), exponemos dev_verification_token para verificación inmediata
-    new_user.dev_verification_token = None if is_smtp_configured() else token
+    # En desarrollo local sin SMTP configurado, retornamos el dev_verification_code para agilidad
+    new_user.dev_verification_code = None if is_smtp_configured() else code
     return new_user
 
 
-@app.get("/auth/verify")
-def verify_email(
-    token: str = Query(..., description="Token único de verificación de correo"),
+@app.post("/auth/verify-code")
+def verify_code(
+    payload: schemas.VerifyCodeRequest,
     db: Session = Depends(get_db),
 ):
     """
-    Confirma el correo electrónico del usuario validando el token temporal.
+    Valida el código numérico de 6 dígitos ingresado manualmente por el usuario.
+    Verifica que coincida y que no esté vencido (15 min).
     """
-    user = (
-        db.query(models.User)
-        .filter(models.User.verification_token == token)
-        .first()
-    )
+    user = db.query(models.User).filter(models.User.email == payload.email).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token de verificación inválido o ya utilizado.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No encontramos una cuenta con ese correo electrónico.",
         )
 
+    if user.is_verified:
+        return {
+            "message": "Esta cuenta ya se encuentra verificada. Ya puedes iniciar sesión.",
+            "is_verified": True,
+            "email": user.email,
+        }
+
+    # Validar coincidencia de código
+    if not user.verification_code or user.verification_code != payload.code.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Código de verificación incorrecto. Revisa el correo o solicita uno nuevo.",
+        )
+
+    # Validar vigencia temporal (15 minutos)
+    if user.verification_code_expires_at:
+        now_utc = datetime.now(timezone.utc)
+        expires_at = user.verification_code_expires_at
+        # Normalizar tzinfo si la base de datos devolvió naive datetime
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if now_utc > expires_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El código de verificación ha expirado. Por favor solicita uno nuevo.",
+            )
+
+    # Activar cuenta y limpiar código
     user.is_verified = True
+    user.verification_code = None
+    user.verification_code_expires_at = None
     user.verification_token = None
     db.commit()
     db.refresh(user)
 
     return {
-        "message": "Correo verificado con éxito. Ya puedes iniciar sesión.",
+        "message": "Cuenta verificada con éxito. Ya puedes iniciar sesión.",
         "email": user.email,
-        "is_verified": user.is_verified,
+        "is_verified": True,
     }
 
 
-@app.post("/auth/resend-verification")
-def resend_verification(
-    payload: schemas.ResendVerificationRequest,
+@app.post("/auth/resend-code")
+def resend_code(
+    payload: schemas.ResendCodeRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """
-    Reenvía el correo de verificación a una cuenta aún no confirmada.
+    Genera y reenvía un nuevo código de 6 dígitos con 15 minutos de vigencia.
     """
     user = db.query(models.User).filter(models.User.email == payload.email).first()
     if not user:
@@ -207,25 +239,58 @@ def resend_verification(
     if user.is_verified:
         return {"message": "Esta cuenta ya se encuentra verificada."}
 
-    token = generate_verification_token()
-    user.verification_token = token
+    code = generate_verification_code()
+    user.verification_code = code
+    user.verification_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     db.commit()
 
     background_tasks.add_task(
-        send_verification_email_task, user.email, user.name, token
+        send_verification_code_email_task, user.email, user.name, code
     )
-    dev_token = None if is_smtp_configured() else token
+
+    dev_code = None if is_smtp_configured() else code
     return {
-        "message": "Se ha enviado un nuevo enlace de verificación a tu correo.",
-        "dev_verification_token": dev_token,
+        "message": "Código de verificación de 6 dígitos enviado a tu correo.",
+        "dev_verification_code": dev_code,
+    }
+
+
+@app.get("/auth/verify")
+def verify_email_legacy(
+    token: str = Query(..., description="Token de verificación"),
+    db: Session = Depends(get_db),
+):
+    """Ruta retrocompatible para verificar por enlace."""
+    user = (
+        db.query(models.User)
+        .filter(models.User.verification_token == token)
+        .first()
+    )
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Enlace de verificación inválido o ya utilizado.",
+        )
+
+    user.is_verified = True
+    user.verification_token = None
+    user.verification_code = None
+    user.verification_code_expires_at = None
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "message": "Correo verificado con éxito. Ya puedes iniciar sesión.",
+        "email": user.email,
+        "is_verified": user.is_verified,
     }
 
 
 @app.post("/auth/login", response_model=schemas.TokenResponse)
 def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     """
-    Inicia sesión verificando credenciales y que la cuenta haya confirmado su correo.
-    Devuelve un token JWT con el email y el rol para que React lo almacene.
+    Inicia sesión verificando credenciales y que la cuenta haya confirmado su código.
+    Si no está verificada, rechaza con 403 para que el frontend pida el código.
     """
     user = (
         db.query(models.User)
@@ -241,7 +306,7 @@ def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     if not user.is_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Debes confirmar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada.",
+            detail="Debes verificar tu cuenta con el código de 6 dígitos antes de iniciar sesión.",
         )
 
     access_token = create_access_token(
@@ -328,27 +393,45 @@ def delete_job(
 
 
 # ==========================================
-# RUTAS DE POSTULACIONES
+# RUTAS DE POSTULACIONES (AUTENTICADAS)
 # ==========================================
 
-@app.post("/jobs/{job_id}/apply", status_code=status.HTTP_201_CREATED)
+@app.post("/jobs/{job_id}/apply", response_model=schemas.ApplicationResponse, status_code=status.HTTP_201_CREATED)
 async def apply_to_job(
     job_id: int,
-    candidate_name: str = Form(...),
-    candidate_email: str = Form(...),
     message: Optional[str] = Form(None),
     cv_file: Optional[UploadFile] = File(None),
+    candidate_name: Optional[str] = Form(None),
+    candidate_email: Optional[str] = Form(None),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Registra una postulación a una vacante con opción de adjuntar CV en PDF.
+    Exige autenticación obligatoria y que el usuario sea candidato (no reclutador) y esté verificado.
+    Asocia la postulación a su cuenta y usa autoritariamente su nombre y correo reales.
     """
+    # 1. Validación de rol: Denegar si el usuario es reclutador
+    if current_user.role == "reclutador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los candidatos pueden postularse a vacantes. Tu cuenta tiene rol de reclutador.",
+        )
+
+    # 2. Validación de cuenta verificada
+    if not current_user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Debes verificar tu correo electrónico antes de poder postularte a una vacante.",
+        )
+
+    # 3. Comprobar existencia del empleo
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Oferta laboral no encontrada")
 
+    # 4. Manejo del archivo PDF
     cv_url = None
-
     if cv_file and cv_file.filename:
         if (
             not cv_file.filename.lower().endswith(".pdf")
@@ -367,10 +450,12 @@ async def apply_to_job(
 
         cv_url = f"/uploads/{unique_filename}"
 
+    # 5. Guardar postulación vinculada al ID del usuario autenticado
     new_application = models.Application(
         job_id=job_id,
-        candidate_name=candidate_name,
-        candidate_email=candidate_email,
+        candidate_id=current_user.id,
+        candidate_name=current_user.name,
+        candidate_email=current_user.email,
         message=message,
         cv_url=cv_url,
     )
@@ -515,6 +600,8 @@ def admin_verify_user(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
     user.is_verified = True
+    user.verification_code = None
+    user.verification_code_expires_at = None
     user.verification_token = None
     db.commit()
     db.refresh(user)

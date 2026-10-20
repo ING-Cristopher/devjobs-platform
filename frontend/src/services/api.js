@@ -1,7 +1,7 @@
 /**
  * Archivo: api.js
  * Propósito: Centralizar llamadas HTTP adaptándose al entorno (Local vs Producción),
- * incluyendo autenticación, verificación de correo y endpoints de administración.
+ * incluyendo autenticación con código de 6 dígitos, verificación, postulaciones autenticadas y administración.
  */
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
@@ -38,7 +38,43 @@ export async function registerUser(userData) {
 }
 
 /**
- * Confirma el correo electrónico mediante el token enviado.
+ * Confirma el correo electrónico mediante el código numérico de 6 dígitos.
+ */
+export async function verifyCode(email, code) {
+  const response = await fetch(`${API_URL}/auth/verify-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractErrorMessage(data, "Código de verificación inválido o expirado")
+    );
+  }
+  return data;
+}
+
+/**
+ * Solicita el reenvío de un nuevo código numérico de 6 dígitos.
+ */
+export async function resendCode(email) {
+  const response = await fetch(`${API_URL}/auth/resend-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractErrorMessage(data, "No se pudo reenviar el código de verificación")
+    );
+  }
+  return data;
+}
+
+/**
+ * Confirma el correo electrónico mediante token (retrocompatibilidad).
  */
 export async function verifyEmailToken(token) {
   const response = await fetch(
@@ -47,25 +83,7 @@ export async function verifyEmailToken(token) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(
-      extractErrorMessage(data, "Token de verificación inválido o expirado")
-    );
-  }
-  return data;
-}
-
-/**
- * Solicita el reenvío del enlace de confirmación de correo.
- */
-export async function resendVerificationEmail(email) {
-  const response = await fetch(`${API_URL}/auth/resend-verification`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(
-      extractErrorMessage(data, "No se pudo reenviar el correo de verificación")
+      extractErrorMessage(data, "Enlace de verificación inválido o expirado")
     );
   }
   return data;
@@ -145,15 +163,22 @@ export async function deleteJob(jobId, token) {
 }
 
 // ==========================================
-// SERVICIOS DE POSTULACIÓN
+// SERVICIOS DE POSTULACIÓN (RESTRINGIDA)
 // ==========================================
 
 /**
- * Envía una postulación utilizando FormData para admitir archivos PDF.
+ * Envía una postulación autenticada utilizando FormData para admitir archivos PDF.
+ * Requiere el token JWT del candidato autenticado.
  */
-export async function applyToJob(jobId, formDataPayload) {
+export async function applyToJob(jobId, formDataPayload, token) {
+  const headers = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_URL}/jobs/${jobId}/apply`, {
     method: "POST",
+    headers,
     body: formDataPayload,
   });
 

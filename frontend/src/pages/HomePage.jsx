@@ -30,8 +30,8 @@ const HERO_ROLES = [
   "full-stack",
 ];
 
-export default function HomePage({ isModalOpen, setIsModalOpen, showToast }) {
-  const { user, token } = useAuth();
+export default function HomePage({ isModalOpen, setIsModalOpen, onOpenAuthModal, showToast }) {
+  const { user, token, isAuthenticated } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -106,6 +106,19 @@ export default function HomePage({ isModalOpen, setIsModalOpen, showToast }) {
 
   const notify = (msg) => {
     if (showToast) showToast(msg);
+  };
+
+  const handleApplyClick = (targetJob) => {
+    if (!isAuthenticated) {
+      if (showToast) showToast("Debes iniciar sesión para postularte a esta vacante");
+      if (onOpenAuthModal) onOpenAuthModal("Debes iniciar sesión para postularte a esta vacante");
+      return;
+    }
+    if (user?.role === "reclutador") {
+      if (showToast) showToast("Solo los candidatos pueden postularse. Tu cuenta tiene rol de reclutador.");
+      return;
+    }
+    setSelectedJobToApply(targetJob);
   };
 
   const fetchJobs = async () => {
@@ -315,7 +328,7 @@ export default function HomePage({ isModalOpen, setIsModalOpen, showToast }) {
                   selectedSkills={selectedSkills}
                   isSaved={savedIds.has(job.id)}
                   onSelect={(targetJob) => setDrawerJob(targetJob)}
-                  onApply={(targetJob) => setSelectedJobToApply(targetJob)}
+                  onApply={(targetJob) => handleApplyClick(targetJob)}
                   onViewApplications={(targetJob) =>
                     setSelectedJobToViewApps(targetJob)
                   }
@@ -455,7 +468,7 @@ export default function HomePage({ isModalOpen, setIsModalOpen, showToast }) {
                 onClick={() => {
                   const target = drawerJob;
                   setDrawerJob(null);
-                  setSelectedJobToApply(target);
+                  handleApplyClick(target);
                 }}
               >
                 Postularme

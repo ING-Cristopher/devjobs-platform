@@ -1,24 +1,25 @@
 /**
  * Archivo: AuthModal.jsx
  * Propósito: Formulario modal conmutable para iniciar sesión, registrarse con política
- * de contraseña sólida (OWASP) y confirmar correo electrónico por token.
+ * de contraseña sólida (OWASP) y confirmar correo mediante código numérico de 6 dígitos.
  */
 
-import { useState } from "react";
-import { AlertCircle, CheckCircle2, MailCheck } from "lucide-react";
+import { useState, useEffect } from "react";
+import { AlertCircle, CheckCircle2, ShieldCheck, Mail, KeyRound } from "lucide-react";
 import {
   registerUser,
   loginUser,
-  verifyEmailToken,
-  resendVerificationEmail,
+  verifyCode,
+  resendCode,
 } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
-export default function AuthModal({ isOpen, onClose, showToast }) {
+export default function AuthModal({ isOpen, onClose, showToast, initialMessage = "" }) {
   const { login } = useAuth();
   const [isRegister, setIsRegister] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState("");
-  const [manualToken, setManualToken] = useState("");
+  const [sixDigitCode, setSixDigitCode] = useState("");
+  const [devCodeHint, setDevCodeHint] = useState("");
   const [error, setError] = useState("");
   const [infoMsg, setInfoMsg] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,12 @@ export default function AuthModal({ isOpen, onClose, showToast }) {
     password: "",
     role: "candidato",
   });
+
+  useEffect(() => {
+    if (initialMessage && isOpen) {
+      setInfoMsg(initialMessage);
+    }
+  }, [initialMessage, isOpen]);
 
   if (!isOpen) return null;
 
@@ -48,6 +55,12 @@ export default function AuthModal({ isOpen, onClose, showToast }) {
     setInfoMsg("");
   };
 
+  const handleCodeChange = (e) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setSixDigitCode(val);
+    setError("");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -65,15 +78,13 @@ export default function AuthModal({ isOpen, onClose, showToast }) {
       if (isRegister) {
         const regRes = await registerUser(formData);
         setPendingVerificationEmail(formData.email);
-        if (regRes?.dev_verification_token) {
-          setManualToken(regRes.dev_verification_token);
-          setInfoMsg(
-            "Modo Local detectado (sin servidor SMTP): Tu cuenta ha sido creada y tu token está listo para activar al instante."
-          );
+        setSixDigitCode("");
+        if (regRes?.dev_verification_code) {
+          setDevCodeHint(regRes.dev_verification_code);
+          setInfoMsg("Hemos enviado un código numérico de 6 dígitos a tu correo.");
         } else {
-          setInfoMsg(
-            "Hemos enviado un enlace de verificación a tu correo. Confirma tu cuenta para poder iniciar sesión."
-          );
+          setDevCodeHint("");
+          setInfoMsg("Hemos enviado un código numérico de 6 dígitos a tu correo.");
         }
       } else {
         const authData = await loginUser({
@@ -86,29 +97,38 @@ export default function AuthModal({ isOpen, onClose, showToast }) {
       }
     } catch (err) {
       setError(err.message);
+      // Si la cuenta no está verificada, redirigir a la vista de código
       if (
         err.message &&
-        err.message.toLowerCase().includes("confirmar tu correo")
+        (err.message.toLowerCase().includes("verificar") ||
+          err.message.toLowerCase().includes("código") ||
+          err.message.toLowerCase().includes("confirmar"))
       ) {
         setPendingVerificationEmail(formData.email);
+        setInfoMsg("Tu cuenta no está verificada. Ingresa el código de 6 dígitos enviado a tu correo.");
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerifyToken = async (e) => {
+  const handleVerifyCodeSubmit = async (e) => {
     e.preventDefault();
-    if (!manualToken.trim()) return;
+    if (sixDigitCode.length !== 6) {
+      setError("Por favor ingresa los 6 dígitos numéricos del código.");
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
-      await verifyEmailToken(manualToken.trim());
+      await verifyCode(pendingVerificationEmail, sixDigitCode);
       setPendingVerificationEmail("");
-      setManualToken("");
+      setSixDigitCode("");
+      setDevCodeHint("");
       setIsRegister(false);
-      setInfoMsg("¡Correo verificado con éxito! Ya puedes iniciar sesión.");
-      if (showToast) showToast("Correo confirmado con éxito");
+      setInfoMsg("¡Cuenta verificada con éxito! Ya puedes iniciar sesión.");
+      if (showToast) showToast("Cuenta activada exitosamente");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -116,16 +136,16 @@ export default function AuthModal({ isOpen, onClose, showToast }) {
     }
   };
 
-  const handleResendEmail = async () => {
+  const handleResendCode = async () => {
     if (!pendingVerificationEmail) return;
     setLoading(true);
     setError("");
     try {
-      const res = await resendVerificationEmail(pendingVerificationEmail);
-      if (res?.dev_verification_token) {
-        setManualToken(res.dev_verification_token);
+      const res = await resendCode(pendingVerificationEmail);
+      if (res?.dev_verification_code) {
+        setDevCodeHint(res.dev_verification_code);
       }
-      setInfoMsg(res.message || "Enlace de verificación reenviado.");
+      setInfoMsg(res.message || "Nuevo código de 6 dígitos enviado.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -143,14 +163,14 @@ export default function AuthModal({ isOpen, onClose, showToast }) {
           <div>
             <h2 className="text-2xl font-extrabold">
               {pendingVerificationEmail
-                ? "Verifica tu correo"
+                ? "Código de verificación"
                 : isRegister
                 ? "Crear una cuenta"
                 : "Iniciar sesión"}
             </h2>
-            <p className="meta mt-1">
+            <p className="meta mt-1 text-xs">
               {pendingVerificationEmail
-                ? `Cuenta pendiente de activación: ${pendingVerificationEmail}`
+                ? `Ingresa el código de 6 dígitos enviado a ${pendingVerificationEmail}`
                 : isRegister
                 ? "Únete a Chamba para publicar vacantes o postularte."
                 : "Ingresa tus credenciales para acceder a Chamba."}
@@ -195,81 +215,108 @@ export default function AuthModal({ isOpen, onClose, showToast }) {
         )}
 
         {pendingVerificationEmail ? (
+          /* ======================================================== */
+          /* PASO 2: VISTA DE CÓDIGO DE VERIFICACIÓN NUMÉRICO DE 6 DÍGITOS */
+          /* ======================================================== */
           <div className="space-y-4">
             <div
-              className="p-4 rounded-2xl text-sm space-y-2"
+              className="p-4 rounded-2xl text-sm space-y-2 text-center"
               style={{
                 background: "var(--bg)",
                 border: "1px solid var(--line)",
               }}
             >
-              <div className="flex items-center gap-2 font-bold">
-                <MailCheck
-                  className="w-5 h-5"
-                  style={{ color: "var(--blue)" }}
-                />
-                <span>Revisa tu bandeja de entrada</span>
+              <div className="flex justify-center items-center gap-2 font-bold text-sm">
+                <ShieldCheck className="w-5 h-5" style={{ color: "var(--blue)" }} />
+                <span>Confirmación de seguridad</span>
               </div>
               <p className="meta text-xs">
-                Haz clic en el enlace enviado a{" "}
-                <b>{pendingVerificationEmail}</b> (en desarrollo local también
-                aparece impreso en la consola del servidor FastAPI).
+                Hemos enviado un código numérico de 6 dígitos con vigencia de 15 minutos a tu correo.
               </p>
             </div>
 
-            {manualToken && (
-              <button
-                type="button"
-                onClick={handleVerifyToken}
-                disabled={loading}
-                className="btn w-full"
+            {/* Aviso especial para desarrollo local */}
+            {devCodeHint && (
+              <div
+                className="p-3 rounded-xl text-xs flex items-center justify-between"
                 style={{
-                  background: "var(--mint)",
-                  color: "#06231d",
-                  fontWeight: 800,
-                  fontSize: "14px",
+                  background: "var(--chip)",
+                  color: "var(--ink)",
+                  border: "1px dashed var(--blue)",
                 }}
               >
-                ⚡ Activar cuenta al instante (Modo Local)
-              </button>
-            )}
-
-            <form onSubmit={handleVerifyToken} className="space-y-2">
-              <label
-                className="block text-xs font-bold"
-                style={{ color: "var(--muted)" }}
-              >
-                ¿Tienes el token de verificación? Pégalo aquí:
-              </label>
-              <div className="flex gap-2">
-                <input
-                  value={manualToken}
-                  onChange={(e) => setManualToken(e.target.value)}
-                  placeholder="Pegar token de verificación..."
-                  className="chamba-input"
-                />
-                <button type="submit" disabled={loading} className="btn">
-                  Verificar
+                <span>💡 Modo Local (sin SMTP):</span>
+                <span className="font-extrabold tracking-widest text-sm" style={{ color: "var(--blue)" }}>
+                  {devCodeHint}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSixDigitCode(devCodeHint)}
+                  className="tag on"
+                  style={{ border: 0, padding: "3px 8px", fontSize: "11px" }}
+                >
+                  Rellenar
                 </button>
               </div>
+            )}
+
+            <form onSubmit={handleVerifyCodeSubmit} className="space-y-4">
+              <div>
+                <label
+                  className="block text-xs font-bold text-center mb-2"
+                  style={{ color: "var(--muted)" }}
+                >
+                  CÓDIGO DE 6 DÍGITOS
+                </label>
+                <div className="flex justify-center">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={sixDigitCode}
+                    onChange={handleCodeChange}
+                    placeholder="• • • • • •"
+                    className="chamba-input text-center text-2xl font-extrabold tracking-[10px]"
+                    style={{
+                      maxWidth: "240px",
+                      height: "54px",
+                      letterSpacing: "12px",
+                      color: "var(--blue)",
+                    }}
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || sixDigitCode.length !== 6}
+                className="btn w-full font-bold"
+                style={{ height: "46px" }}
+              >
+                {loading ? "Validando..." : "Confirmar cuenta"}
+              </button>
             </form>
 
             <div className="flex justify-between items-center pt-2">
               <button
                 type="button"
-                onClick={handleResendEmail}
+                onClick={handleResendCode}
                 disabled={loading}
                 className="btn ghost text-xs"
                 style={{ padding: "8px 14px" }}
               >
-                Reenviar correo
+                Reenviar código
               </button>
+
               <button
                 type="button"
                 onClick={() => {
                   setPendingVerificationEmail("");
                   setIsRegister(false);
                   setError("");
+                  setInfoMsg("");
                 }}
                 className="reset"
                 style={{ marginTop: 0 }}
@@ -279,6 +326,9 @@ export default function AuthModal({ isOpen, onClose, showToast }) {
             </div>
           </div>
         ) : (
+          /* ======================================================== */
+          /* PASO 1: FORMULARIO DE INICIO DE SESIÓN / REGISTRO         */
+          /* ======================================================== */
           <>
             <form onSubmit={handleSubmit} className="space-y-3">
               {isRegister && (

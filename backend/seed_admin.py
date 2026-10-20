@@ -22,18 +22,47 @@ def init_db(db_engine: Engine) -> None:
 
     if db_engine.dialect.name == "sqlite":
         with db_engine.connect() as conn:
+            # 1. Comprobaciones para tabla 'users'
             result = conn.execute(text("PRAGMA table_info(users)"))
-            columns = {row[1] for row in result.fetchall()}
+            user_columns = {row[1] for row in result.fetchall()}
 
-            if "is_verified" not in columns:
+            if "is_verified" not in user_columns:
                 conn.execute(
                     text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN NOT NULL DEFAULT 1")
                 )
                 conn.commit()
 
-            if "verification_token" not in columns:
+            if "verification_code" not in user_columns:
+                conn.execute(
+                    text("ALTER TABLE users ADD COLUMN verification_code VARCHAR(6)")
+                )
+                conn.commit()
+
+            if "verification_code_expires_at" not in user_columns:
+                conn.execute(
+                    text("ALTER TABLE users ADD COLUMN verification_code_expires_at DATETIME")
+                )
+                conn.commit()
+
+            if "verification_token" not in user_columns:
                 conn.execute(
                     text("ALTER TABLE users ADD COLUMN verification_token VARCHAR(255)")
+                )
+                conn.commit()
+
+            # 2. Comprobaciones para tabla 'applications'
+            app_result = conn.execute(text("PRAGMA table_info(applications)"))
+            app_columns = {row[1] for row in app_result.fetchall()}
+
+            if "cv_url" not in app_columns:
+                conn.execute(
+                    text("ALTER TABLE applications ADD COLUMN cv_url VARCHAR(500)")
+                )
+                conn.commit()
+
+            if "candidate_id" not in app_columns:
+                conn.execute(
+                    text("ALTER TABLE applications ADD COLUMN candidate_id INTEGER")
                 )
                 conn.commit()
 
@@ -60,6 +89,8 @@ def seed_admin_user(db: Session) -> models.User:
             updated = True
         if not existing_admin.is_verified:
             existing_admin.is_verified = True
+            existing_admin.verification_code = None
+            existing_admin.verification_code_expires_at = None
             existing_admin.verification_token = None
             updated = True
         if updated:
@@ -73,6 +104,8 @@ def seed_admin_user(db: Session) -> models.User:
         hashed_password=hash_password(admin_password),
         role="admin",
         is_verified=True,
+        verification_code=None,
+        verification_code_expires_at=None,
         verification_token=None,
     )
     db.add(new_admin)

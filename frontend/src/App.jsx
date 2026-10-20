@@ -33,7 +33,7 @@ function NavigationBar({
   const handlePostVacancy = () => {
     if (!isAuthenticated) {
       showToast("Inicia sesión como reclutador para publicar vacantes");
-      onOpenAuthModal();
+      onOpenAuthModal("Inicia sesión como reclutador para publicar vacantes");
       return;
     }
     if (!isRecruiter) {
@@ -96,7 +96,7 @@ function NavigationBar({
               </button>
             </div>
           ) : (
-            <button onClick={onOpenAuthModal} className="btn ghost">
+            <button onClick={() => onOpenAuthModal()} className="btn ghost">
               <LogIn className="w-4 h-4" />
               <span>Acceder</span>
             </button>
@@ -114,6 +114,7 @@ function NavigationBar({
 export default function App() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authInitialMessage, setAuthInitialMessage] = useState("");
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
@@ -128,15 +129,20 @@ export default function App() {
     }, 2600);
   };
 
-  // Soporte automático si el usuario abre un enlace con ?token=... en el navegador
+  const handleOpenAuthModal = (message = "") => {
+    setAuthInitialMessage(message);
+    setIsAuthModalOpen(true);
+  };
+
+  // Soporte retrocompatible si el usuario abre un enlace con ?token=... en el navegador
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
     if (token) {
       verifyEmailToken(token)
         .then(() => {
-          showToast("¡Correo confirmado con éxito! Ya puedes iniciar sesión.");
-          setIsAuthModalOpen(true);
+          showToast("¡Correo verificado con éxito! Ya puedes iniciar sesión.");
+          handleOpenAuthModal("¡Correo verificado! Ingresa tus credenciales.");
         })
         .catch((err) => {
           showToast(err.message);
@@ -153,7 +159,7 @@ export default function App() {
         <div className="min-h-screen">
           <NavigationBar
             onOpenCreateModal={() => setIsCreateModalOpen(true)}
-            onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onOpenAuthModal={handleOpenAuthModal}
             onOpenAdminModal={() => setIsAdminModalOpen(true)}
             showToast={showToast}
           />
@@ -165,20 +171,30 @@ export default function App() {
                 <HomePage
                   isModalOpen={isCreateModalOpen}
                   setIsModalOpen={setIsCreateModalOpen}
+                  onOpenAuthModal={handleOpenAuthModal}
                   showToast={showToast}
                 />
               }
             />
             <Route
               path="/jobs/:id"
-              element={<JobDetailPage showToast={showToast} />}
+              element={
+                <JobDetailPage
+                  onOpenAuthModal={handleOpenAuthModal}
+                  showToast={showToast}
+                />
+              }
             />
           </Routes>
 
           {/* Modal Global de Autenticación */}
           <AuthModal
             isOpen={isAuthModalOpen}
-            onClose={() => setIsAuthModalOpen(false)}
+            onClose={() => {
+              setIsAuthModalOpen(false);
+              setAuthInitialMessage("");
+            }}
+            initialMessage={authInitialMessage}
             showToast={showToast}
           />
 
@@ -201,4 +217,6 @@ export default function App() {
       </BrowserRouter>
     </AuthProvider>
   );
+}
+
 }

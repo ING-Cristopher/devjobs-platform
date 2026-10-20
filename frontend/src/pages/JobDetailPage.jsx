@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { getJobById } from "../services/api";
 import ApplyModal from "../components/ApplyModal";
 import { getJobColor, getJobSkills } from "../utils/skills";
+import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft,
   Calendar,
@@ -11,9 +12,10 @@ import {
   Loader2,
 } from "lucide-react";
 
-export default function JobDetailPage({ showToast }) {
+export default function JobDetailPage({ onOpenAuthModal, showToast }) {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
 
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +43,19 @@ export default function JobDetailPage({ showToast }) {
     setCopied(true);
     if (showToast) showToast("¡Enlace copiado al portapapeles!");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleApplyClick = () => {
+    if (!isAuthenticated) {
+      if (showToast) showToast("Debes iniciar sesión para postularte a esta vacante");
+      if (onOpenAuthModal) onOpenAuthModal("Debes iniciar sesión para postularte a esta vacante");
+      return;
+    }
+    if (user?.role === "reclutador") {
+      if (showToast) showToast("Solo los candidatos pueden postularse. Tu cuenta tiene rol de reclutador.");
+      return;
+    }
+    setIsApplyOpen(true);
   };
 
   if (loading) {
@@ -146,7 +161,7 @@ export default function JobDetailPage({ showToast }) {
             </button>
 
             <button
-              onClick={() => setIsApplyOpen(true)}
+              onClick={handleApplyClick}
               className="btn flex-1 md:flex-initial"
             >
               Postularme ahora
@@ -208,7 +223,7 @@ export default function JobDetailPage({ showToast }) {
             </p>
             <p className="font-bold">No dejes pasar esta oportunidad</p>
           </div>
-          <button onClick={() => setIsApplyOpen(true)} className="btn">
+          <button onClick={handleApplyClick} className="btn">
             Postularme ahora
           </button>
         </div>

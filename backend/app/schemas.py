@@ -1,7 +1,7 @@
 """
 Módulo: schemas.py
-Propósito: Validación y serialización con Pydantic V2 (usando ConfigDict)
-y políticas de seguridad OWASP para contraseñas.
+Propósito: Validación y serialización con Pydantic V2 (usando ConfigDict),
+políticas de seguridad OWASP para contraseñas y verificación con código numérico de 6 dígitos.
 """
 
 import re
@@ -69,9 +69,8 @@ class UserResponse(UserBase):
     id: int
     is_verified: bool = False
     created_at: datetime
-    dev_verification_token: Optional[str] = None
+    dev_verification_code: Optional[str] = None  # Solo visible en desarrollo local si no hay SMTP
 
-    # Sintaxis estándar de Pydantic V2
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -81,7 +80,20 @@ class TokenResponse(BaseModel):
     user: UserResponse
 
 
-class ResendVerificationRequest(BaseModel):
+class VerifyCodeRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+    @field_validator("code")
+    @classmethod
+    def validate_six_digit_code(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not re.fullmatch(r"\d{6}", cleaned):
+            raise ValueError("El código de verificación debe contener exactamente 6 dígitos numéricos.")
+        return cleaned
+
+
+class ResendCodeRequest(BaseModel):
     email: EmailStr
 
 
@@ -112,19 +124,24 @@ class AdminStatsResponse(BaseModel):
 # ==========================================
 
 class ApplicationBase(BaseModel):
-    candidate_name: str
-    candidate_email: str
+    candidate_name: Optional[str] = None
+    candidate_email: Optional[str] = None
     message: Optional[str] = None
-    cv_url: Optional[str] = None  # <-- URL del archivo PDF
+    cv_url: Optional[str] = None
 
 
 class ApplicationCreate(ApplicationBase):
     pass
 
 
-class ApplicationResponse(ApplicationBase):
+class ApplicationResponse(BaseModel):
     id: int
     job_id: int
+    candidate_id: Optional[int] = None
+    candidate_name: str
+    candidate_email: str
+    message: Optional[str] = None
+    cv_url: Optional[str] = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -152,7 +169,5 @@ class JobResponse(JobBase):
     created_at: datetime
     recruiter_id: Optional[int] = None
     applications: List[ApplicationResponse] = []
-
-    model_config = ConfigDict(from_attributes=True)
 
     model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,6 @@
 """
 Módulo: email_service.py
-Propósito: Envío asíncrono de correos transaccionales de verificación de cuenta
+Propósito: Generación y envío asíncrono de códigos numéricos de verificación de 6 dígitos
 vía SMTP (Gmail, SendGrid, Mailgun, Resend SMTP) con fallback seguro en consola para desarrollo local.
 """
 
@@ -12,7 +12,7 @@ from email.mime.text import MIMEText
 
 
 def is_smtp_configured() -> bool:
-    """Retorna True si las variables SMTP requeridas están definidas en el entorno."""
+    """Retorna True si las credenciales SMTP están definidas en el entorno."""
     return bool(
         os.getenv("SMTP_HOST")
         and os.getenv("SMTP_USER")
@@ -20,49 +20,51 @@ def is_smtp_configured() -> bool:
     )
 
 
-def generate_verification_token() -> str:
-    """Genera un token criptográficamente seguro de un solo uso para confirmar el correo."""
-    return secrets.token_urlsafe(32)
-
-
-def send_verification_email_task(recipient_email: str, recipient_name: str, token: str) -> None:
+def generate_verification_code() -> str:
     """
-    Tarea ejecutada en segundo plano (BackgroundTasks de FastAPI) que construye y envía
-    el enlace de verificación (/auth/verify?token=...).
+    Genera un código numérico aleatorio de 6 dígitos criptográficamente seguro (100000 a 999999).
     """
-    base_url = os.getenv("BACKEND_PUBLIC_URL", "http://127.0.0.1:8000").rstrip("/")
-    verify_url = f"{base_url}/auth/verify?token={token}"
+    return f"{secrets.randbelow(900000) + 100000}"
 
+
+def send_verification_code_email_task(recipient_email: str, recipient_name: str, code: str) -> None:
+    """
+    Tarea en segundo plano (FastAPI BackgroundTasks) para despachar el correo
+    con el código numérico de 6 dígitos visible en texto grande.
+    """
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_password = os.getenv("SMTP_PASSWORD")
     smtp_from = os.getenv("SMTP_FROM", smtp_user or "no-reply@chamba.do")
 
-    subject = "Confirma tu cuenta en Chamba"
+    subject = f"{code} es tu código de verificación de Chamba"
     html_body = f"""
-    <div style="font-family: 'DM Sans', system-ui, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #dde2f5; border-radius: 18px; color: #0e1330;">
-      <h2 style="margin-top: 0;">Hola, {recipient_name} 👋</h2>
-      <p>Gracias por registrarte en <strong>Chamba</strong>. Para activar tu cuenta y poder iniciar sesión, confirma tu correo electrónico haciendo clic en el siguiente botón:</p>
-      <p style="margin: 26px 0;">
-        <a href="{verify_url}" style="background: #2b4bff; color: #ffffff; text-decoration: none; font-weight: 700; padding: 12px 22px; border-radius: 999px; display: inline-block;">
-          Verificar mi correo
-        </a>
-      </p>
-      <p style="font-size: 13px; color: #5b6286;">O copia y pega este enlace en tu navegador:<br/><a href="{verify_url}">{verify_url}</a></p>
+    <div style="font-family: 'DM Sans', system-ui, -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; border: 1px solid #dde2f5; border-radius: 20px; color: #0e1330; background: #ffffff;">
+      <div style="font-size: 24px; font-weight: 800; margin-bottom: 20px; color: #0e1330;">chamba<span style="color: #ffb627;">•</span></div>
+      <h2 style="margin-top: 0; font-size: 22px;">Hola, {recipient_name} 👋</h2>
+      <p style="color: #5b6286; font-size: 15px; line-height: 1.6;">Ingresa el siguiente código numérico de 6 dígitos en la aplicación para activar tu cuenta:</p>
+      
+      <div style="margin: 28px 0; text-align: center;">
+        <div style="display: inline-block; background: #f1f4ff; border: 2px dashed #2b4bff; padding: 16px 28px; border-radius: 14px; font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #2b4bff;">
+          {code}
+        </div>
+      </div>
+
+      <p style="color: #5b6286; font-size: 13px;">⏱️ Este código es válido durante los próximos <strong>15 minutos</strong>. No lo compartas con nadie.</p>
+      <hr style="border: none; border-top: 1px solid #dde2f5; margin: 24px 0;" />
+      <p style="color: #9aa3d0; font-size: 12px; margin-bottom: 0;">Si no solicitaste crear una cuenta en Chamba, puedes ignorar este mensaje.</p>
     </div>
     """
 
-    # Si no hay servidor SMTP configurado (entorno local / CI), imprimimos el enlace en consola
+    # Modo Local sin SMTP: Imprimir el código de manera prominente en consola
     if not is_smtp_configured():
-        print("=" * 70)
-        print(" [EMAIL VERIFICATION - MODO LOCAL SIN SERVIDOR SMTP] ")
-        print(f" Para: {recipient_email}")
-        print(f" Token: {token}")
-        print(f" Enlace de activación: {verify_url}")
-        print(" Para recibir correos reales en tu bandeja de entrada,")
-        print(" configura SMTP_HOST, SMTP_USER y SMTP_PASSWORD en backend/.env")
-        print("=" * 70)
+        print("\n" + "=" * 65)
+        print(" [CHAMBA VERIFICATION CODE - MODO LOCAL]")
+        print(f" Destinatario : {recipient_email}")
+        print(f" CÓDIGO (6 DÍGITOS) : {code}")
+        print(" Vigencia     : 15 minutos")
+        print("=" * 65 + "\n")
         return
 
     try:
@@ -76,6 +78,6 @@ def send_verification_email_task(recipient_email: str, recipient_name: str, toke
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.sendmail(smtp_from, [recipient_email], msg.as_string())
-            print(f"[EMAIL SUCCESS] Correo de verificación enviado exitosamente a {recipient_email}")
+            print(f"[EMAIL SUCCESS] Código de verificación {code} enviado a {recipient_email}")
     except Exception as exc:
-        print(f"[EMAIL ERROR] No se pudo enviar el correo a {recipient_email}: {exc}")
+        print(f"[EMAIL ERROR] Fallo al enviar correo a {recipient_email}: {exc}")

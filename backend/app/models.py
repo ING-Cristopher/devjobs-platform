@@ -5,6 +5,7 @@ Totalmente compatible con PostgreSQL (Neon/Render) y SQLite (local).
 Relaciones:
   - User 1 ──< N Job (cascade="all, delete-orphan", ondelete="CASCADE")
   - Job  1 ──< N Application (cascade="all, delete-orphan", ondelete="CASCADE")
+  - User 1 ──< N Application (postulaciones realizadas por el candidato)
 """
 
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
@@ -26,6 +27,8 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), default="candidato", nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
+    verification_code = Column(String(6), nullable=True, index=True)
+    verification_code_expires_at = Column(DateTime(timezone=True), nullable=True)
     verification_token = Column(String(255), nullable=True, index=True)
     created_at = Column(
         DateTime(timezone=True),
@@ -38,6 +41,13 @@ class User(Base):
         "Job",
         back_populates="recruiter",
         cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    # Relación: Postulaciones realizadas por este usuario si es candidato
+    applications = relationship(
+        "Application",
+        back_populates="candidate",
         passive_deletes=True,
     )
 
@@ -85,6 +95,11 @@ class Application(Base):
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True, index=True)
+    candidate_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     candidate_name = Column(String(150), nullable=False)
     candidate_email = Column(String(255), nullable=False)
     message = Column(Text, nullable=True)
@@ -102,3 +117,6 @@ class Application(Base):
 
     # Relación hacia el empleo al que pertenece esta postulación
     job = relationship("Job", back_populates="applications")
+
+    # Relación hacia el candidato autenticado
+    candidate = relationship("User", back_populates="applications")

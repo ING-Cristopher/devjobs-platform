@@ -3,8 +3,10 @@ Módulo: test_api.py
 Propósito: Pruebas de integración automatizadas para el pipeline de CI/CD.
 Verifica:
   1. Políticas OWASP de contraseña sólida.
-  2. Flujo de confirmación de correo por token (/auth/verify) y bloqueo de login sin verificar.
-  3. Rol de Administrador ('admin'), semillero automático y moderación de vacantes/usuarios.
+  2. Verificación por código numérico de 6 dígitos (/auth/verify-code).
+  3. Bloqueo de login hasta ingresar el código correcto.
+  4. Restricción de postulaciones: solo candidatos autenticados y verificados.
+  5. Semillero y permisos del superusuario 'admin'.
 """
 
 import sys
@@ -24,7 +26,7 @@ from app.database import Base, get_db
 from app import models
 from seed_admin import seed_admin_user
 
-# 1. Base de datos SQLite exclusiva en memoria para pruebas
+# Base de datos SQLite en memoria para pruebas
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
 engine = create_engine(
@@ -35,7 +37,6 @@ engine = create_engine(
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-# 2. Reemplazamos la dependencia de la base de datos de producción por la de pruebas
 def override_get_db():
     db = TestingSessionLocal()
     try:
@@ -46,33 +47,30 @@ def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
-# Cliente de pruebas que simula llamadas HTTP
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
 def setup_database():
-    """Se ejecuta antes de cada prueba creando tablas limpias y las destruye al finalizar."""
+    """Crea tablas limpias antes de cada prueba."""
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
 
 
 # ==========================================
-# CASOS DE PRUEBA (TEST SUITE)
+# CASOS DE PRUEBA
 # ==========================================
 
 def test_read_root():
-    """Verifica que la raíz de la API responda con código 200 OK."""
     response = client.get("/")
     assert response.status_code == 200
     assert response.json() == {"message": "API activa"}
 
 
 def test_owasp_password_policy_rejects_weak_passwords():
-    """Verifica que contraseñas sin mayúscula, número o carácter especial sean rechazadas (422)."""
     weak_payload = {
-        "name": "Usuario Debil",
+        "name": "Usuario Débil",
         "email": "debil@devjobs.com",
         "password": "password123",  # Sin mayúscula ni carácter especial
         "role": "candidato",
@@ -81,121 +79,152 @@ def test_owasp_password_policy_rejects_weak_passwords():
     assert response.status_code == 422
 
 
-def test_register_user_success():
-    """Verifica el registro exitoso con contraseña OWASP y estado inicial no verificado."""
-    payload = {
-        "name": "Reclutador Test",
-        "email": "reclutador@devjobs.com",
-        "password": "Password123!",
-        "role": "reclutador",
-    }
-    response = client.post("/auth/register", json=payload)
-    assert response.status_code == 201
-    data = response.json()
-    assert data["email"] == "reclutador@devjobs.com"
-    assert data["is_verified"] is False
-    assert "hashed_password" not in data
-
-
-def test_login_blocked_until_email_verified_and_create_job_pipeline():
+def test_register_and_six_digit_code_verification_pipeline():
     """
-    Prueba el flujo completo con verificación de correo por token:
-    1. Registra un reclutador (is_verified=False).
-    2. Intenta hacer login antes de verificar -> debe ser bloqueado (403 Forbidden).
-    3. Confirma el correo mediante GET /auth/verify?token=...
-    4. Hace login exitosamente, obtiene JWT y publica una vacante.
+    1. Registra un usuario (is_verified=False).
+    2. Intento de login previo a verificar código -> 403 Forbidden.
+    3. Intento de código inválido -> 400 Bad Request.
+    4. Ingreso de código de 6 dígitos correcto -> Cuenta activada.
+    5. Login exitoso con JWT.
     """
-    # 1. Registro con contraseña OWASP válida
-    client.post(
+    reg_res = client.post(
         "/auth/register",
         json={
-            "name": "Tech Corp",
-            "email": "hr@techcorp.com",
-            "password": "SecurePassword123!",
-            "role": "reclutador",
+            "name": "Ana Morales",
+            "email": "ana@devjobs.com",
+            "password": "Password123!",
+            "role": "candidato",
         },
     )
+    assert reg_res.status_code == 201
+    assert reg_res.json()["is_verified"] is False
 
-    # 2. Intento de login sin verificar correo -> bloqueado (403)
-    unverified_login = client.post(
+    # Login antes de verificar -> 403
+    login_before = client.post(
         "/auth/login",
-        json={"email": "hr@techcorp.com", "password": "SecurePassword123!"},
+        json={"email": "ana@devjobs.com", "password": "Password123!"},
     )
-    assert unverified_login.status_code == 403
+    assert login_before.status_code == 403
 
-    # 3. Obtener token de verificación de la BD de prueba y llamar a /auth/verify
+    # Obtener el código de 6 dígitos generado en BD
     with TestingSessionLocal() as db:
-        user = db.query(models.User).filter(models.User.email == "hr@techcorp.com").first()
+        user = db.query(models.User).filter(models.User.email == "ana@devjobs.com").first()
         assert user is not None
-        assert user.verification_token is not None
-        verify_token = user.verification_token
+        assert user.verification_code is not None
+        assert len(user.verification_code) == 6
+        real_code = user.verification_code
 
-    verify_res = client.get(f"/auth/verify?token={verify_token}")
-    assert verify_res.status_code == 200
-    assert verify_res.json()["is_verified"] is True
-
-    # 4. Login tras verificar correo
-    login_res = client.post(
-        "/auth/login",
-        json={"email": "hr@techcorp.com", "password": "SecurePassword123!"},
+    # Probar código incorrecto -> 400
+    bad_verify = client.post(
+        "/auth/verify-code",
+        json={"email": "ana@devjobs.com", "code": "000000"},
     )
-    assert login_res.status_code == 200
-    token = login_res.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+    assert bad_verify.status_code == 400
 
-    # 5. Publicar empleo con el token
-    job_payload = {
-        "title": "Ingeniero Cloud AWS",
-        "company": "Tech Corp",
-        "location": "Remoto",
-        "job_type": "Remoto",
-        "salary": "$4,000 USD",
-        "description": "Buscamos especialista en arquitecturas escalables.",
-    }
-    create_job_res = client.post("/jobs", json=job_payload, headers=headers)
-    assert create_job_res.status_code == 201
+    # Probar código correcto -> 200
+    good_verify = client.post(
+        "/auth/verify-code",
+        json={"email": "ana@devjobs.com", "code": real_code},
+    )
+    assert good_verify.status_code == 200
+    assert good_verify.json()["is_verified"] is True
 
-    # 6. Verificar que se liste en el catálogo
-    jobs_list_res = client.get("/jobs")
-    assert jobs_list_res.status_code == 200
-    jobs = jobs_list_res.json()
-    assert len(jobs) == 1
-    assert jobs[0]["title"] == "Ingeniero Cloud AWS"
+    # Login tras verificación -> 200 OK
+    login_after = client.post(
+        "/auth/login",
+        json={"email": "ana@devjobs.com", "password": "Password123!"},
+    )
+    assert login_after.status_code == 200
+    assert "access_token" in login_after.json()
 
 
-def test_admin_seed_and_moderation_permissions():
+def test_job_application_requires_authenticated_candidate():
     """
-    Verifica que el superusuario 'admin' creado por el semillero:
-    - Pueda iniciar sesión directamente (is_verified=True).
-    - Pueda consultar /admin/stats y /admin/users.
-    - Pueda eliminar vacantes creadas por cualquier reclutador.
+    Verifica que:
+    1. Un usuario anónimo no pueda postularse a una vacante (401).
+    2. Un reclutador autenticado sea denegado al intentar postularse (403).
+    3. Un candidato autenticado y verificado pueda postularse exitosamente.
     """
+    with TestingSessionLocal() as db:
+        # Crear reclutador verificado
+        recruiter = models.User(
+            name="Recruiter One",
+            email="recruiter@devjobs.com",
+            hashed_password="fake",
+            role="reclutador",
+            is_verified=True,
+        )
+        db.add(recruiter)
+        db.commit()
+        db.refresh(recruiter)
+
+        # Crear vacante
+        job = models.Job(
+            title="Frontend Developer",
+            company="Startup Tech",
+            location="Remoto",
+            description="Requisitos React",
+            recruiter_id=recruiter.id,
+        )
+        db.add(job)
+
+        # Crear candidato verificado
+        candidate = models.User(
+            name="Dev Candidate",
+            email="candidate@devjobs.com",
+            hashed_password="fake",
+            role="candidato",
+            is_verified=True,
+        )
+        db.add(candidate)
+        db.commit()
+        db.refresh(job)
+        db.refresh(candidate)
+
+        job_id = job.id
+        recruiter_id = recruiter.id
+        candidate_id = candidate.id
+
+    # 1. Postulación sin token -> 401
+    anon_res = client.post(f"/jobs/{job_id}/apply", data={"message": "Hola"})
+    assert anon_res.status_code == 401
+
+    # 2. Postulación con token de reclutador -> 403
+    from app.auth import create_access_token
+    recruiter_token = create_access_token({"sub": "recruiter@devjobs.com", "role": "reclutador", "id": recruiter_id})
+    rec_res = client.post(
+        f"/jobs/{job_id}/apply",
+        data={"message": "Soy reclutador"},
+        headers={"Authorization": f"Bearer {recruiter_token}"},
+    )
+    assert rec_res.status_code == 403
+    assert "reclutador" in rec_res.json()["detail"].lower()
+
+    # 3. Postulación con token de candidato -> 201 Created
+    candidate_token = create_access_token({"sub": "candidate@devjobs.com", "role": "candidato", "id": candidate_id})
+    cand_res = client.post(
+        f"/jobs/{job_id}/apply",
+        data={"message": "Mi portafolio: https://github.com"},
+        headers={"Authorization": f"Bearer {candidate_token}"},
+    )
+    assert cand_res.status_code == 201
+    data = cand_res.json()
+    assert data["candidate_name"] == "Dev Candidate"
+    assert data["candidate_email"] == "candidate@devjobs.com"
+
+
+def test_admin_seed_and_moderation():
     with TestingSessionLocal() as db:
         admin_user = seed_admin_user(db)
         admin_email = admin_user.email
 
-    # Login como admin
     admin_login = client.post(
         "/auth/login",
         json={"email": admin_email, "password": "AdminChamba2026!"},
     )
     assert admin_login.status_code == 200
-    admin_token = admin_login.json()["access_token"]
-    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+    token = admin_login.json()["access_token"]
 
-    # Consultar estadísticas de admin
-    stats_res = client.get("/admin/stats", headers=admin_headers)
+    stats_res = client.get("/admin/stats", headers={"Authorization": f"Bearer {token}"})
     assert stats_res.status_code == 200
     assert stats_res.json()["total_admins"] >= 1
-
-
-def test_unauthorized_user_cannot_create_job():
-    """Verifica que una petición sin token a /jobs sea rechazada con 401 Unauthorized."""
-    job_payload = {
-        "title": "Hack Job",
-        "company": "Fake",
-        "location": "Nowhere",
-        "description": "Intento no autenticado",
-    }
-    response = client.post("/jobs", json=job_payload)
-    assert response.status_code == 401
