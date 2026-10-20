@@ -26,7 +26,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), default="candidato", nullable=False)
-    is_verified = Column(Boolean, default=False, nullable=False)
+    is_verified = Column(Boolean, default=True, nullable=False)
     verification_code = Column(String(6), nullable=True, index=True)
     verification_code_expires_at = Column(DateTime(timezone=True), nullable=True)
     verification_token = Column(String(255), nullable=True, index=True)

@@ -67,9 +67,9 @@ class UserLogin(BaseModel):
 
 class UserResponse(UserBase):
     id: int
-    is_verified: bool = False
+    is_verified: bool = True
     created_at: datetime
-    dev_verification_code: Optional[str] = None  # Solo visible en desarrollo local si no hay SMTP
+    dev_verification_code: Optional[str] = None  # Retrocompatibilidad
 
     model_config = ConfigDict(from_attributes=True)
 

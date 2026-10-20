@@ -79,13 +79,10 @@ def test_owasp_password_policy_rejects_weak_passwords():
     assert response.status_code == 422
 
 
-def test_register_and_six_digit_code_verification_pipeline():
+def test_register_and_immediate_login_pipeline():
     """
-    1. Registra un usuario (is_verified=False).
-    2. Intento de login previo a verificar código -> 403 Forbidden.
-    3. Intento de código inválido -> 400 Bad Request.
-    4. Ingreso de código de 6 dígitos correcto -> Cuenta activada.
-    5. Login exitoso con JWT.
+    1. Registra un usuario aplicando política OWASP (cuenta activa inmediatamente, is_verified=True).
+    2. Login inmediato exitoso con emisión de JWT sin requerir verificación por correo.
     """
     reg_res = client.post(
         "/auth/register",
@@ -97,45 +94,16 @@ def test_register_and_six_digit_code_verification_pipeline():
         },
     )
     assert reg_res.status_code == 201
-    assert reg_res.json()["is_verified"] is False
+    assert reg_res.json()["is_verified"] is True
 
-    # Login antes de verificar -> 403
-    login_before = client.post(
+    # Login directo sin requerir verificación por correo -> 200 OK
+    login_res = client.post(
         "/auth/login",
         json={"email": "ana@devjobs.com", "password": "Password123!"},
     )
-    assert login_before.status_code == 403
-
-    # Obtener el código de 6 dígitos generado en BD
-    with TestingSessionLocal() as db:
-        user = db.query(models.User).filter(models.User.email == "ana@devjobs.com").first()
-        assert user is not None
-        assert user.verification_code is not None
-        assert len(user.verification_code) == 6
-        real_code = user.verification_code
-
-    # Probar código incorrecto -> 400
-    bad_verify = client.post(
-        "/auth/verify-code",
-        json={"email": "ana@devjobs.com", "code": "000000"},
-    )
-    assert bad_verify.status_code == 400
-
-    # Probar código correcto -> 200
-    good_verify = client.post(
-        "/auth/verify-code",
-        json={"email": "ana@devjobs.com", "code": real_code},
-    )
-    assert good_verify.status_code == 200
-    assert good_verify.json()["is_verified"] is True
-
-    # Login tras verificación -> 200 OK
-    login_after = client.post(
-        "/auth/login",
-        json={"email": "ana@devjobs.com", "password": "Password123!"},
-    )
-    assert login_after.status_code == 200
-    assert "access_token" in login_after.json()
+    assert login_res.status_code == 200
+    assert "access_token" in login_res.json()
+    assert login_res.json()["user"]["email"] == "ana@devjobs.com"
 
 
 def test_job_application_requires_authenticated_candidate():

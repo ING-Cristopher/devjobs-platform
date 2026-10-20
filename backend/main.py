@@ -78,8 +78,8 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="DevJobs / Chamba API",
-    description="Backend robusto con políticas OWASP, verificación por código de 6 dígitos y postulaciones autenticadas.",
-    version="2.2.0",
+    description="Backend robusto con políticas OWASP, autenticación JWT directa y postulaciones autenticadas.",
+    version="2.3.0",
     lifespan=lifespan,
 )
 
@@ -118,13 +118,11 @@ app.add_middleware(
 )
 def register(
     user_data: schemas.UserCreate,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """
     Registra una nueva cuenta de usuario aplicando validación OWASP de contraseña.
-    Genera un código numérico aleatorio de 6 dígitos (válido por 15 min) y envía el correo de forma asíncrona.
-    NO se emite sesión ni se activa la cuenta hasta que el usuario ingrese el código.
+    La cuenta queda verificada y activa inmediatamente (sin confirmación de correo).
     """
     existing_user = (
         db.query(models.User).filter(models.User.email == user_data.email).first()
@@ -135,30 +133,21 @@ def register(
             detail="Ya existe una cuenta registrada con este correo electrónico",
         )
 
-    code = generate_verification_code()
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
-
     new_user = models.User(
         name=user_data.name,
         email=user_data.email,
         hashed_password=hash_password(user_data.password),
         role=user_data.role,  # 'reclutador' o 'candidato'
-        is_verified=False,
-        verification_code=code,
-        verification_code_expires_at=expires_at,
+        is_verified=True,
+        verification_code=None,
+        verification_code_expires_at=None,
         verification_token=None,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # Envío asíncrono del correo con el código numérico de 6 dígitos
-    background_tasks.add_task(
-        send_verification_code_email_task, new_user.email, new_user.name, code
-    )
-
-    # En desarrollo local sin SMTP configurado, retornamos el dev_verification_code para agilidad
-    new_user.dev_verification_code = None if is_smtp_configured() else code
+    new_user.dev_verification_code = None
     return new_user
 
 
@@ -168,8 +157,7 @@ def verify_code(
     db: Session = Depends(get_db),
 ):
     """
-    Valida el código numérico de 6 dígitos ingresado manualmente por el usuario.
-    Verifica que coincida y que no esté vencido (15 min).
+    Endpoint retrocompatible: confirma que la cuenta está activa.
     """
     user = db.query(models.User).filter(models.User.email == payload.email).first()
     if not user:
@@ -178,40 +166,10 @@ def verify_code(
             detail="No encontramos una cuenta con ese correo electrónico.",
         )
 
-    if user.is_verified:
-        return {
-            "message": "Esta cuenta ya se encuentra verificada. Ya puedes iniciar sesión.",
-            "is_verified": True,
-            "email": user.email,
-        }
-
-    # Validar coincidencia de código
-    if not user.verification_code or user.verification_code != payload.code.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Código de verificación incorrecto. Revisa el correo o solicita uno nuevo.",
-        )
-
-    # Validar vigencia temporal (15 minutos)
-    if user.verification_code_expires_at:
-        now_utc = datetime.now(timezone.utc)
-        expires_at = user.verification_code_expires_at
-        # Normalizar tzinfo si la base de datos devolvió naive datetime
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        if now_utc > expires_at:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="El código de verificación ha expirado. Por favor solicita uno nuevo.",
-            )
-
-    # Activar cuenta y limpiar código
-    user.is_verified = True
-    user.verification_code = None
-    user.verification_code_expires_at = None
-    user.verification_token = None
-    db.commit()
-    db.refresh(user)
+    if not user.is_verified:
+        user.is_verified = True
+        db.commit()
+        db.refresh(user)
 
     return {
         "message": "Cuenta verificada con éxito. Ya puedes iniciar sesión.",
@@ -223,11 +181,10 @@ def verify_code(
 @app.post("/auth/resend-code")
 def resend_code(
     payload: schemas.ResendCodeRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
     """
-    Genera y reenvía un nuevo código de 6 dígitos con 15 minutos de vigencia.
+    Endpoint retrocompatible: la verificación de correo no es requerida.
     """
     user = db.query(models.User).filter(models.User.email == payload.email).first()
     if not user:
@@ -236,22 +193,9 @@ def resend_code(
             detail="No encontramos una cuenta con ese correo electrónico.",
         )
 
-    if user.is_verified:
-        return {"message": "Esta cuenta ya se encuentra verificada."}
-
-    code = generate_verification_code()
-    user.verification_code = code
-    user.verification_code_expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
-    db.commit()
-
-    background_tasks.add_task(
-        send_verification_code_email_task, user.email, user.name, code
-    )
-
-    dev_code = None if is_smtp_configured() else code
     return {
-        "message": "Código de verificación de 6 dígitos enviado a tu correo.",
-        "dev_verification_code": dev_code,
+        "message": "La verificación de correo no es requerida. Tu cuenta está activa.",
+        "dev_verification_code": None,
     }
 
 
@@ -289,8 +233,7 @@ def verify_email_legacy(
 @app.post("/auth/login", response_model=schemas.TokenResponse)
 def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     """
-    Inicia sesión verificando credenciales y que la cuenta haya confirmado su código.
-    Si no está verificada, rechaza con 403 para que el frontend pida el código.
+    Inicia sesión verificando credenciales.
     """
     user = (
         db.query(models.User)
@@ -301,12 +244,6 @@ def login(credentials: schemas.UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Correo electrónico o contraseña incorrectos",
-        )
-
-    if not user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Debes verificar tu cuenta con el código de 6 dígitos antes de iniciar sesión.",
         )
 
     access_token = create_access_token(
@@ -418,14 +355,7 @@ async def apply_to_job(
             detail="Solo los candidatos pueden postularse a vacantes. Tu cuenta tiene rol de reclutador.",
         )
 
-    # 2. Validación de cuenta verificada
-    if not current_user.is_verified:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Debes verificar tu correo electrónico antes de poder postularte a una vacante.",
-        )
-
-    # 3. Comprobar existencia del empleo
+    # 2. Comprobar existencia del empleo
     job = db.query(models.Job).filter(models.Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Oferta laboral no encontrada")

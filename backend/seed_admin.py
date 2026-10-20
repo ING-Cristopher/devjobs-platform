@@ -66,6 +66,16 @@ def init_db(db_engine: Engine) -> None:
                 )
                 conn.commit()
 
+        # Asegurar que todas las cuentas existentes queden activas (verificadas)
+        try:
+            with db_engine.connect() as conn:
+                conn.execute(
+                    text("UPDATE users SET is_verified = 1 WHERE is_verified = 0 OR is_verified IS NULL")
+                )
+                conn.commit()
+        except Exception:
+            pass
+
 
 def seed_admin_user(db: Session) -> models.User:
     """

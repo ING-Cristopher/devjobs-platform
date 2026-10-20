@@ -136,7 +136,7 @@ export default function ApplyModal({ job, isOpen, onClose, onSuccess }) {
                 <span>Postulando como: <strong>{user?.name}</strong></span>
               </div>
               <span className="tag on" style={{ padding: "2px 7px", fontSize: "10px" }}>
-                Verificado
+                Candidato
               </span>
             </div>
 
