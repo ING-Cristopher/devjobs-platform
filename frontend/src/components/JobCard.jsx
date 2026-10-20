@@ -22,7 +22,7 @@ export default function JobCard({
   const { user, token } = useAuth();
 
   const applicantCount = job.applications ? job.applications.length : 0;
-  const isOwner = user && job.recruiter_id === user.id;
+  const isOwner = user && (job.recruiter_id === user.id || user.role === "admin");
 
   const skills = getJobSkills(job);
   const hasSelectedSkills = selectedSkills && selectedSkills.size > 0;

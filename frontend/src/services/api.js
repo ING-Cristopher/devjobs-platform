@@ -1,17 +1,27 @@
 /**
  * Archivo: api.js
- * Propósito: Centralizar llamadas HTTP adaptándose al entorno (Local vs Producción)
+ * Propósito: Centralizar llamadas HTTP adaptándose al entorno (Local vs Producción),
+ * incluyendo autenticación, verificación de correo y endpoints de administración.
  */
 
-// Si existe la variable de entorno la usa (Producción), sino usa localhost (Desarrollo local)
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+function extractErrorMessage(data, fallbackMessage) {
+  if (!data) return fallbackMessage;
+  if (typeof data.detail === "string") return data.detail;
+  if (Array.isArray(data.detail) && data.detail.length > 0) {
+    const firstMsg = data.detail[0]?.msg || fallbackMessage;
+    return firstMsg.replace(/^Value error,\s*/i, "");
+  }
+  return fallbackMessage;
+}
+
 // ==========================================
-// SERVICIOS DE AUTENTICACIÓN
+// SERVICIOS DE AUTENTICACIÓN Y VERIFICACIÓN
 // ==========================================
 
 /**
- * Registra una cuenta nueva (reclutador o candidato).
+ * Registra una cuenta nueva (reclutador o candidato) con validación OWASP.
  */
 export async function registerUser(userData) {
   const response = await fetch(`${API_URL}/auth/register`, {
@@ -20,9 +30,43 @@ export async function registerUser(userData) {
     body: JSON.stringify(userData),
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || "Error al registrar la cuenta");
+    throw new Error(extractErrorMessage(data, "Error al registrar la cuenta"));
+  }
+  return data;
+}
+
+/**
+ * Confirma el correo electrónico mediante el token enviado.
+ */
+export async function verifyEmailToken(token) {
+  const response = await fetch(
+    `${API_URL}/auth/verify?token=${encodeURIComponent(token)}`
+  );
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractErrorMessage(data, "Token de verificación inválido o expirado")
+    );
+  }
+  return data;
+}
+
+/**
+ * Solicita el reenvío del enlace de confirmación de correo.
+ */
+export async function resendVerificationEmail(email) {
+  const response = await fetch(`${API_URL}/auth/resend-verification`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractErrorMessage(data, "No se pudo reenviar el correo de verificación")
+    );
   }
   return data;
 }
@@ -37,9 +81,9 @@ export async function loginUser(credentials) {
     body: JSON.stringify(credentials),
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || "Credenciales incorrectas");
+    throw new Error(extractErrorMessage(data, "Credenciales incorrectas"));
   }
   return data;
 }
@@ -61,27 +105,27 @@ export async function getJobById(jobId) {
 }
 
 /**
- * Crear empleo: requiere token JWT de un reclutador en la cabecera Authorization.
+ * Crear empleo: requiere token JWT de un reclutador o admin en la cabecera Authorization.
  */
 export async function createJob(jobData, token) {
   const response = await fetch(`${API_URL}/jobs`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`, // Autenticación Bearer Token
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(jobData),
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || "Error al publicar el empleo");
+    throw new Error(extractErrorMessage(data, "Error al publicar el empleo"));
   }
   return data;
 }
 
 /**
- * Eliminar empleo: requiere token JWT del reclutador dueño de la oferta.
+ * Eliminar empleo: requiere token JWT del reclutador dueño de la oferta o de un admin.
  */
 export async function deleteJob(jobId, token) {
   const response = await fetch(`${API_URL}/jobs/${jobId}`, {
@@ -93,7 +137,9 @@ export async function deleteJob(jobId, token) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Error al eliminar la oferta laboral");
+    throw new Error(
+      extractErrorMessage(errorData, "Error al eliminar la oferta laboral")
+    );
   }
   return true;
 }
@@ -106,8 +152,6 @@ export async function deleteJob(jobId, token) {
  * Envía una postulación utilizando FormData para admitir archivos PDF.
  */
 export async function applyToJob(jobId, formDataPayload) {
-  // Nota: Al usar FormData, NO se define manualmente 'Content-Type'
-  // El navegador añade automáticamente 'multipart/form-data' con su boundary.
   const response = await fetch(`${API_URL}/jobs/${jobId}/apply`, {
     method: "POST",
     body: formDataPayload,
@@ -115,7 +159,9 @@ export async function applyToJob(jobId, formDataPayload) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Error al enviar la postulación");
+    throw new Error(
+      extractErrorMessage(errorData, "Error al enviar la postulación")
+    );
   }
 
   return await response.json();
@@ -127,16 +173,17 @@ export async function applyToJob(jobId, formDataPayload) {
 export async function downloadApplicationsCSV(jobId, token) {
   const response = await fetch(`${API_URL}/jobs/${jobId}/applications/csv`, {
     headers: {
-      Authorization: `Bearer ${token}`
-    }
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Error al descargar el reporte CSV");
+    throw new Error(
+      extractErrorMessage(errorData, "Error al descargar el reporte CSV")
+    );
   }
 
-  // Convertir respuesta a Blob para iniciar la descarga en el navegador
   const blob = await response.blob();
   const downloadUrl = window.URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -146,4 +193,78 @@ export async function downloadApplicationsCSV(jobId, token) {
   link.click();
   link.remove();
   window.URL.revokeObjectURL(downloadUrl);
+}
+
+// ==========================================
+// SERVICIOS DE ADMINISTRACIÓN (ROL 'admin')
+// ==========================================
+
+export async function getAdminStats(token) {
+  const response = await fetch(`${API_URL}/admin/stats`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractErrorMessage(data, "Error al obtener estadísticas de admin")
+    );
+  }
+  return data;
+}
+
+export async function getAdminUsers(token) {
+  const response = await fetch(`${API_URL}/admin/users`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractErrorMessage(data, "Error al obtener la lista de usuarios")
+    );
+  }
+  return data;
+}
+
+export async function updateUserRole(userId, role, token) {
+  const response = await fetch(`${API_URL}/admin/users/${userId}/role`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ role }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractErrorMessage(data, "Error al actualizar el rol del usuario")
+    );
+  }
+  return data;
+}
+
+export async function verifyUserByAdmin(userId, token) {
+  const response = await fetch(`${API_URL}/admin/users/${userId}/verify`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractErrorMessage(data, "Error al verificar manualmente al usuario")
+    );
+  }
+  return data;
+}
+
+export async function deleteUserByAdmin(userId, token) {
+  const response = await fetch(`${API_URL}/admin/users/${userId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(extractErrorMessage(data, "Error al eliminar el usuario"));
+  }
+  return true;
 }

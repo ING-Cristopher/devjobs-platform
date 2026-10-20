@@ -1,6 +1,7 @@
 """
 Módulo: auth.py
-Propósito: Gestionar el cifrado seguro de contraseñas y la emisión/validación de tokens JWT.
+Propósito: Gestionar el cifrado seguro de contraseñas, la emisión/validación de tokens JWT
+y el control de acceso basado en roles (RBAC) y verificación de correo.
 Nota de arquitectura: Usamos la librería 'bcrypt' directamente para evitar los bugs
 conocidos de compatibilidad entre passlib y las versiones modernas de bcrypt (>= 4.1.0).
 """
@@ -66,7 +67,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
     """
     Middleware de dependencia para proteger rutas:
-    Valida la firma del token y carga el usuario autenticado desde la base de datos.
+    Valida la firma del token, carga el usuario autenticado y exige cuenta verificada.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -85,4 +86,22 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
 
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Debes verificar tu correo electrónico antes de acceder a esta función.",
+        )
+
     return user
+
+
+def require_admin(current_user: models.User = Depends(get_current_user)) -> models.User:
+    """
+    Dependencia exclusiva para endpoints de administración general.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Se requieren privilegios de administrador.",
+        )
+    return current_user

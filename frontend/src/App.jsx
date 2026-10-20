@@ -1,19 +1,26 @@
 /**
  * Archivo: App.jsx
  * Propósito: Componente raíz. Enruta las páginas, gestiona el tema claro/oscuro
- * con estética Chamba y provee el contexto de autenticación.
+ * con estética Chamba, provee autenticación y expone el Panel de Administración para el rol 'admin'.
  */
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import HomePage from "./pages/HomePage";
 import JobDetailPage from "./pages/JobDetailPage";
 import AuthModal from "./components/AuthModal";
-import { LogIn, LogOut } from "lucide-react";
+import AdminModal from "./components/AdminModal";
+import { verifyEmailToken } from "./services/api";
+import { LogIn, LogOut, Shield } from "lucide-react";
 
-function NavigationBar({ onOpenCreateModal, onOpenAuthModal, showToast }) {
-  const { user, isAuthenticated, isRecruiter, logout } = useAuth();
+function NavigationBar({
+  onOpenCreateModal,
+  onOpenAuthModal,
+  onOpenAdminModal,
+  showToast,
+}) {
+  const { user, isAuthenticated, isRecruiter, isAdmin, logout } = useAuth();
 
   const toggleTheme = () => {
     const root = document.documentElement;
@@ -30,7 +37,9 @@ function NavigationBar({ onOpenCreateModal, onOpenAuthModal, showToast }) {
       return;
     }
     if (!isRecruiter) {
-      showToast("Tu cuenta es de candidato. Usa una cuenta de reclutador para publicar.");
+      showToast(
+        "Tu cuenta es de candidato. Usa una cuenta de reclutador para publicar."
+      );
       return;
     }
     onOpenCreateModal();
@@ -53,6 +62,17 @@ function NavigationBar({ onOpenCreateModal, onOpenAuthModal, showToast }) {
           >
             Tema
           </button>
+
+          {isAdmin && (
+            <button
+              onClick={onOpenAdminModal}
+              className="btn ghost"
+              style={{ borderColor: "var(--sun)" }}
+            >
+              <Shield className="w-4 h-4" />
+              <span>Panel Admin</span>
+            </button>
+          )}
 
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
@@ -94,6 +114,7 @@ function NavigationBar({ onOpenCreateModal, onOpenAuthModal, showToast }) {
 export default function App() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
   const toastTimerRef = useRef(null);
@@ -104,8 +125,27 @@ export default function App() {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => {
       setToastVisible(false);
-    }, 2400);
+    }, 2600);
   };
+
+  // Soporte automático si el usuario abre un enlace con ?token=... en el navegador
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    if (token) {
+      verifyEmailToken(token)
+        .then(() => {
+          showToast("¡Correo confirmado con éxito! Ya puedes iniciar sesión.");
+          setIsAuthModalOpen(true);
+        })
+        .catch((err) => {
+          showToast(err.message);
+        })
+        .finally(() => {
+          window.history.replaceState({}, document.title, window.location.pathname);
+        });
+    }
+  }, []);
 
   return (
     <AuthProvider>
@@ -114,6 +154,7 @@ export default function App() {
           <NavigationBar
             onOpenCreateModal={() => setIsCreateModalOpen(true)}
             onOpenAuthModal={() => setIsAuthModalOpen(true)}
+            onOpenAdminModal={() => setIsAdminModalOpen(true)}
             showToast={showToast}
           />
 
@@ -138,6 +179,14 @@ export default function App() {
           <AuthModal
             isOpen={isAuthModalOpen}
             onClose={() => setIsAuthModalOpen(false)}
+            showToast={showToast}
+          />
+
+          {/* Modal de Administración (exclusivo rol 'admin') */}
+          <AdminModal
+            isOpen={isAdminModalOpen}
+            onClose={() => setIsAdminModalOpen(false)}
+            showToast={showToast}
           />
 
           {/* Toast Global estilo Chamba */}

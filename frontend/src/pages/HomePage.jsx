@@ -214,7 +214,7 @@ export default function HomePage({ isModalOpen, setIsModalOpen, showToast }) {
   const drawerSkills = drawerJob ? getJobSkills(drawerJob) : [];
   const drawerScore = drawerJob ? getMatchScore(drawerJob, selectedSkills) : 0;
   const isDrawerJobOwner =
-    drawerJob && user && drawerJob.recruiter_id === user.id;
+    drawerJob && user && (drawerJob.recruiter_id === user.id || user.role === "admin");
 
   return (
     <div className="wrap">

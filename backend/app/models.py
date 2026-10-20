@@ -1,12 +1,13 @@
 """
 Módulo: models.py
 Propósito: Definición de las entidades y tablas relacionales usando SQLAlchemy ORM.
+Totalmente compatible con PostgreSQL (Neon/Render) y SQLite (local).
 Relaciones:
-  - User 1 ──< N Job (Un reclutador puede crear múltiples ofertas laborales)
-  - Job  1 ──< N Application (Un empleo puede tener múltiples candidatos postulados)
+  - User 1 ──< N Job (cascade="all, delete-orphan", ondelete="CASCADE")
+  - Job  1 ──< N Application (cascade="all, delete-orphan", ondelete="CASCADE")
 """
 
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database import Base
@@ -14,63 +15,90 @@ from app.database import Base
 
 class User(Base):
     """
-    Tabla de usuarios del sistema.
-    Roles permitidos:
-      - 'reclutador': Puede publicar y eliminar ofertas, y ver postulantes.
-      - 'candidato': Solo puede postularse a vacantes.
+    Tabla 'users': Representa a los usuarios del sistema.
+    Roles admitidos: 'admin', 'reclutador', 'candidato'.
     """
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    role = Column(String, default="candidato", nullable=False) # 'candidato' o 'reclutador'
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    name = Column(String(150), nullable=False)
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(String(50), default="candidato", nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)
+    verification_token = Column(String(255), nullable=True, index=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
-    # Relación: Empleos publicados por este usuario si es reclutador
-    jobs = relationship("Job", back_populates="recruiter", cascade="all, delete-orphan")
+    # Relación: Empleos publicados por este usuario si es reclutador/admin
+    jobs = relationship(
+        "Job",
+        back_populates="recruiter",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Job(Base):
     """
-    Tabla de ofertas laborales publicadas.
+    Tabla 'jobs': Ofertas laborales publicadas por reclutadores o administradores.
     """
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True, nullable=False)
-    company = Column(String, nullable=False)
-    location = Column(String, nullable=False)
-    job_type = Column(String, default="Remoto", nullable=False) # 'Remoto', 'Presencial', 'Híbrido'
+    title = Column(String(200), index=True, nullable=False)
+    company = Column(String(200), nullable=False)
+    location = Column(String(200), nullable=False)
+    job_type = Column(String(50), default="Remoto", nullable=False)  # 'Remoto', 'Presencial', 'Híbrido'
+    salary = Column(String(100), nullable=True)
     description = Column(Text, nullable=False)
-    salary = Column(String, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-    # Clave foránea que apunta al reclutador que creó la oferta
-    recruiter_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    recruiter_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Relación inversa hacia el usuario reclutador
     recruiter = relationship("User", back_populates="jobs")
 
-    # Relación: Si se elimina la oferta, se eliminan todas sus postulaciones (cascade)
-    applications = relationship("Application", back_populates="job", cascade="all, delete-orphan")
+    # Relación hacia las postulaciones recibidas
+    applications = relationship(
+        "Application",
+        back_populates="job",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class Application(Base):
     """
-    Tabla de postulaciones realizadas por candidatos a un empleo.
+    Tabla 'applications': Postulaciones realizadas por candidatos a una vacante.
     """
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True, index=True)
-    job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
-    candidate_name = Column(String, nullable=False)
-    candidate_email = Column(String, nullable=False)
+    candidate_name = Column(String(150), nullable=False)
+    candidate_email = Column(String(255), nullable=False)
     message = Column(Text, nullable=True)
-    cv_url = Column(String, nullable=True)  # <-- NUEVO: Ruta o URL del archivo PDF
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    cv_url = Column(String(500), nullable=True)
+    job_id = Column(
+        Integer,
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
     # Relación hacia el empleo al que pertenece esta postulación
     job = relationship("Job", back_populates="applications")
-    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False)
